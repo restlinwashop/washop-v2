@@ -1877,8 +1877,8 @@ delPkg = async function(id) {
 };
 
 // Manual order
-const _origSaveManualOrder = saveManualOrder;
 if (typeof saveManualOrder !== 'undefined') {
+  const _origSaveManualOrder = saveManualOrder;
   saveManualOrder = async function() {
     const cid = document.getElementById('mo-cust').value; const date = document.getElementById('mo-date').value;
     if (!cid||!date) return alert('Select customer and date.');
