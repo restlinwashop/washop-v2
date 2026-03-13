@@ -1531,26 +1531,6 @@ function renderDashboard(){
 }
 function addActivity(text){if(!S.activity)S.activity=[];S.activity.unshift({text,time:timeStr()});document.getElementById('activity-feed').innerHTML=(S.activity||[]).slice(0,10).map(a=>`<div class="act-item"><div class="act-dot"></div><div style="font-size:13px;flex:1">${a.text}</div><div class="act-time">${a.time}</div></div>`).join('');}
 
-// ═══════════════════════════════════════════════
-// SEED
-// ═══════════════════════════════════════════════
-S.history.push(
-  {date:'2026-03-01',customerId:'c1',productId:'p2',qty:200,type:'receive'},
-  {date:'2026-03-01',customerId:'c1',productId:'p2',qty:200,type:'dispatch'},
-  {date:'2026-03-08',customerId:'c1',productId:'p2',qty:180,type:'receive'},
-  {date:'2026-03-08',customerId:'c1',productId:'p2',qty:180,type:'dispatch'},
-  {date:'2026-03-10',customerId:'c2',productId:'p5',qty:120,type:'receive'},
-);
-S.stockEntries.push(
-  {customerId:'c1',productId:'p2',openingBalance:500,currentStock:45,threshold:100},
-  {customerId:'c1',productId:'p3',openingBalance:300,currentStock:210,threshold:50},
-  {customerId:'c2',productId:'p5',openingBalance:200,currentStock:30,threshold:60},
-);
-// Sample customer prices
-S.custPrices['c1']={'p2':0.85,'p3':0.65,'p1':1.20};
-S.custPrices['c2']={'p5':2.50,'p6':3.80,'p7':5.00};
-renderAdmin();renderDashboard();updateOrderBadge();checkAlarms();
-renderRecvLog();
 
 // ═══════════════════════════════════════
 // SUPABASE LIVE DATABASE
