@@ -715,7 +715,7 @@ const S = {
 };
 
 // Per-customer assigned products (default: all)
-const custProds = {};
+let custProds = {};
 function getCustProds(cid){if(!custProds[cid])custProds[cid]=new Set(S.products.map(p=>p.id));return custProds[cid];}
 
 // ═══════════════════════════════════════════════
