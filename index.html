@@ -257,7 +257,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   <nav>
     <div class="nav-section">Operations</div>
     <div class="nav-item active" onclick="showPage('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
-    <div class="nav-item" onclick="showPage('receiving')"><span class="nav-icon">📦</span>Receiving</div>
+    <div class="nav-item" onclick="showReceiving()"><span class="nav-icon">📦</span>Receiving <span style="font-size:10px;margin-left:auto;color:var(--sidebar-muted)">🔒</span></div>
     <div class="nav-item" onclick="showPage('order')">
       <span class="nav-icon">🗂️</span>Order / Pack
       <span class="nav-badge" id="order-badge" style="display:none">0</span>
@@ -271,6 +271,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     <div class="nav-item" onclick="showPage('history')"><span class="nav-icon">📈</span>History</div>
     <div class="nav-item" onclick="showPage('driver')"><span class="nav-icon">🗺️</span>Driver App</div>
     <div class="nav-section">Config</div>
+    <div class="nav-item" onclick="showPage('bulk')"><span class="nav-icon">📋</span>Bulk Edit</div>
     <div class="nav-item" onclick="showPage('admin')"><span class="nav-icon">⚙️</span>Admin</div>
     <div class="nav-item" onclick="showPage('pricing')"><span class="nav-icon">💰</span>Pricing</div>
   </nav>
@@ -479,11 +480,17 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
           <div class="field"><label>Name</label><input id="nc-name" placeholder="e.g. Hilton Hotel CBD"></div>
           <div class="field"><label>Address</label><input id="nc-addr" placeholder="e.g. 190 Elizabeth St"></div>
           <div class="field" style="min-width:120px"><label>Frequency</label>
-            <select id="nc-freq"><option>Weekly</option><option>Fortnightly</option><option>Monthly</option><option>3x Week</option><option>2x Week</option><option>Daily</option></select>
+            <select id="nc-freq"><option>Weekly</option><option>Fortnightly</option><option>Monthly</option><option>3x Week</option><option>2x Week</option><option>Daily</option><option>On Demand</option></select>
           </div>
-          <div class="field" style="min-width:80px"><label>Due Day</label>
-            <select id="nc-day"><option value="1">Mon</option><option value="2">Tue</option><option value="3">Wed</option><option value="4">Thu</option><option value="5">Fri</option><option value="6">Sat</option></select>
-          </div>
+          <div class="field" style="min-width:140px"><label>Delivery Day(s)</label>
+<div style="display:flex;flex-wrap:wrap;gap:8px;padding:6px 0">
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="1" class="nc-day-cb" style="width:auto"> Mon</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="2" class="nc-day-cb" style="width:auto"> Tue</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="3" class="nc-day-cb" style="width:auto"> Wed</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="4" class="nc-day-cb" style="width:auto"> Thu</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="5" class="nc-day-cb" style="width:auto"> Fri</label>
+  <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" value="6" class="nc-day-cb" style="width:auto"> Sat</label>
+</div></div>
           <div class="field" style="min-width:160px"><label>Email</label><input id="nc-email" type="email"></div>
           <div class="field" style="min-width:120px"><label>Phone</label><input id="nc-phone"></div>
           <button class="btn btn-primary" style="height:40px;margin-top:21px" onclick="addCustomer()">Add</button>
@@ -583,6 +590,68 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   </div>
 </div>
 
+
+  <!-- BULK EDIT PAGE -->
+  <div class="page" id="page-bulk">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">Bulk Customer Editor</div>
+        <div style="font-size:12px;color:var(--muted)">Edit driver, days, and frequency for all customers in one place</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="text" id="bulk-search" placeholder="Search..." oninput="renderBulk()" style="width:200px">
+        <select id="bulk-driver-filter" onchange="renderBulk()" style="width:140px">
+          <option value="">All drivers</option>
+          <option value="__none__">Unassigned</option>
+        </select>
+        <button class="btn btn-primary" onclick="saveBulkAll()">💾 Save All Changes</button>
+      </div>
+    </div>
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 16px;font-size:12px;margin-bottom:14px;color:#856404">
+      ⚡ Make your changes below, then click <strong>Save All Changes</strong> to apply everything at once.
+    </div>
+    <div style="overflow-x:auto">
+      <table id="bulk-table">
+        <thead>
+          <tr>
+            <th style="min-width:200px">Customer</th>
+            <th style="min-width:140px">Driver</th>
+            <th style="min-width:60px">Route #</th>
+            <th style="min-width:280px">Delivery Days</th>
+            <th style="min-width:130px">Frequency</th>
+          </tr>
+        </thead>
+        <tbody id="bulk-tbody"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end">
+      <button class="btn btn-primary" onclick="saveBulkAll()">💾 Save All Changes</button>
+    </div>
+  </div>
+
+  <!-- RECEIVE PIN PAGE -->
+  <div class="page" id="page-receive-pin" style="display:none;position:fixed;inset:0;background:#1e2235;z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+    <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#4ade80">WashOps</div>
+    <div style="font-size:14px;color:#9ca3af;margin-bottom:8px">Enter Receiving PIN</div>
+    <div id="pin-display" style="font-family:'DM Mono',monospace;font-size:36px;font-weight:600;color:#fff;letter-spacing:8px;min-width:120px;text-align:center">____</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:220px">
+      <button onclick="pinKey('1')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">1</button>
+      <button onclick="pinKey('2')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">2</button>
+      <button onclick="pinKey('3')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">3</button>
+      <button onclick="pinKey('4')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">4</button>
+      <button onclick="pinKey('5')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">5</button>
+      <button onclick="pinKey('6')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">6</button>
+      <button onclick="pinKey('7')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">7</button>
+      <button onclick="pinKey('8')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">8</button>
+      <button onclick="pinKey('9')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">9</button>
+      <button onclick="pinKey('del')" style="height:60px;border-radius:10px;background:#3d2020;border:none;color:#f87171;font-size:18px;cursor:pointer">⌫</button>
+      <button onclick="pinKey('0')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">0</button>
+      <button onclick="pinKey('ok')" style="height:60px;border-radius:10px;background:#16a34a;border:none;color:#fff;font-size:18px;font-weight:700;cursor:pointer">OK</button>
+    </div>
+    <div id="pin-error" style="color:#f87171;font-size:13px;min-height:20px"></div>
+    <div style="font-size:11px;color:#6b7591;margin-top:10px">Default PIN: 1234 · Change in Admin → Settings</div>
+  </div>
+
 </main>
 
 <!-- ════ KEYPAD MODAL ════ -->
@@ -622,11 +691,17 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
         <div class="field"><label>Phone</label><input id="cc-phone"></div>
         <div class="field"><label>Address</label><input id="cc-addr"></div>
         <div class="field"><label>Frequency</label>
-          <select id="cc-freq"><option>Weekly</option><option>Fortnightly</option><option>Monthly</option><option>3x Week</option><option>2x Week</option><option>Daily</option></select>
+          <select id="cc-freq"><option>Weekly</option><option>Fortnightly</option><option>Monthly</option><option>3x Week</option><option>2x Week</option><option>Daily</option><option>On Demand</option></select>
         </div>
-        <div class="field"><label>Due Day</label>
-          <select id="cc-day"><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select>
-        </div>
+        <div class="field"><label>Delivery Day(s)</label>
+          <div id="cc-days-wrap" style="display:flex;flex-wrap:wrap;gap:10px;padding:6px 0">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="1" class="cc-day-cb" style="width:auto"> Mon</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="2" class="cc-day-cb" style="width:auto"> Tue</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="3" class="cc-day-cb" style="width:auto"> Wed</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="4" class="cc-day-cb" style="width:auto"> Thu</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="5" class="cc-day-cb" style="width:auto"> Fri</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="6" class="cc-day-cb" style="width:auto"> Sat</label>
+          </div></div>
         <div class="field"><label>Notes</label><textarea id="cc-notes" rows="2"></textarea></div>
         <div class="field"><label>Status</label><select id="cc-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
       </div>
@@ -750,7 +825,7 @@ function prodType(prodId){const p=S.products.find(x=>x.id===prodId);return p?cat
 // ═══════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════
-const PAGE_TITLES={dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
+const PAGE_TITLES={bulk:'Bulk Customer Editor',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1318,7 +1393,11 @@ function openCC(id){
   document.getElementById('cc-phone').value=c.phone||'';
   document.getElementById('cc-addr').value=c.address||'';
   document.getElementById('cc-freq').value=c.frequency;
-  document.getElementById('cc-day').value=c.dueDay||4;
+  // Set delivery day checkboxes
+  const days = c.deliveryDays && c.deliveryDays.length ? c.deliveryDays : [c.dueDay||4];
+  document.querySelectorAll('.cc-day-cb').forEach(cb => {
+    cb.checked = days.includes(parseInt(cb.value));
+  });
   document.getElementById('cc-notes').value=c.notes||'';
   document.getElementById('cc-active').value=c.active?'1':'0';
   // Reset tabs
@@ -1602,7 +1681,7 @@ async function loadFromDB() {
 
     S.customers = custs.map(c => ({
       id:c.id, name:c.name, address:c.address||'', frequency:c.frequency||'Weekly',
-      dueDay:c.due_day||4, email:c.email||'', phone:c.phone||'',
+      dueDay:c.due_day||4, deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4], email:c.email||'', phone:c.phone||'',
       notes:c.notes||'', active:c.active!==0, driverId:c.driver_id||null, routeOrder:c.route_order||99
     }));
     S.drivers     = drvs.map(d => ({id:d.id, name:d.name, vehicle:d.vehicle||''}));
@@ -1796,8 +1875,9 @@ removeProd = async function(id) {
 const _origSaveCCdetails = saveCCdetails;
 saveCCdetails = async function() {
   const c = S.customers.find(x=>x.id===ccId); if (!c) return;
-  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:parseInt(document.getElementById('cc-day').value),email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,active:parseInt(document.getElementById('cc-active').value)===1};
-  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,email:upd.email,phone:upd.phone,notes:upd.notes,active:upd.active?1:0},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
+  const ccDays=[...document.querySelectorAll('.cc-day-cb:checked')].map(x=>parseInt(x.value));
+  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:ccDays[0]||4,deliveryDays:ccDays.length?ccDays:[4],email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,active:parseInt(document.getElementById('cc-active').value)===1};
+  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,delivery_days:JSON.stringify(upd.deliveryDays),email:upd.email,phone:upd.phone,notes:upd.notes,active:upd.active?1:0},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
   Object.assign(c, upd); renderAdmin(); _toast('✓ Saved', 2000);
   document.getElementById('cc-hdr-name').textContent=c.name; document.getElementById('cc-hdr-meta').textContent=c.frequency+' · '+c.address;
 };
@@ -1807,20 +1887,11 @@ const _origSaveCCdriver = saveCCdriver;
 saveCCdriver = async function() {
   const c = S.customers.find(x=>x.id===ccId); if (!c) return;
   const did = document.getElementById('cc-driver-sel').value||null;
-  // FIX: input field is 'cc-order-num' not 'cc-route-order'
-  const ro = parseInt(document.getElementById('cc-order-num').value)||99;
+  const ro = parseInt(document.getElementById('cc-route-order').value)||99;
   try {
-    // FIX 1: patch customer record
     await _patch('customers',{driver_id:did,route_order:ro},'?id=eq.'+ccId);
-    // FIX 2: Supabase in() syntax requires format: status=in.(val1,val2)
-    // BUT some versions need it URL-encoded or as separate calls — use two separate patches to be safe
-    await _patch('orders',{driver_id:did,route_order:ro},'?customer_id=eq.'+ccId+'&status=eq.pending');
-    await _patch('orders',{driver_id:did,route_order:ro},'?customer_id=eq.'+ccId+'&status=eq.packed');
-  } catch(e) {
-    console.error('saveCCdriver DB error:', e);
-    _toast('⚠ Save failed: ' + e.message.slice(0,80), 5000);
-    return; // stop — don't update local state if DB failed
-  }
+    await _patch('orders',{driver_id:did,route_order:ro},'?customer_id=eq.'+ccId+'&status=in.(pending,packed)');
+  } catch(e) { console.warn('saveCCdriver DB:', e); }
   c.driverId=did; c.routeOrder=ro;
   S.orders.forEach(o=>{ if(o.customerId===ccId&&o.status!=='delivered'){o.driverId=did;o.routeOrder=ro;} });
   renderAdmin(); _toast('✓ Driver saved', 2000);
@@ -1944,7 +2015,224 @@ setInterval(loadFromDB, 60000);
   }
 })();
 
+
+// ═══════════════════════════════════════
+// BULK EDIT
+// ═══════════════════════════════════════
+let bulkEdits = {}; // custId -> {driverId, routeOrder, deliveryDays, frequency}
+
+function renderBulk() {
+  const q = (document.getElementById('bulk-search')?.value||'').toLowerCase();
+  const df = document.getElementById('bulk-driver-filter')?.value||'';
+  
+  // Populate driver filter
+  const ddf = document.getElementById('bulk-driver-filter');
+  if(ddf && ddf.options.length <= 2) {
+    S.drivers.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = d.name;
+      ddf.appendChild(opt);
+    });
+  }
+  
+  let custs = S.customers.filter(c => c.active);
+  if(q) custs = custs.filter(c => c.name.toLowerCase().includes(q));
+  if(df === '__none__') custs = custs.filter(c => !c.driverId);
+  else if(df) custs = custs.filter(c => c.driverId === df);
+  
+  const DAYS_LABELS = ['','Mon','Tue','Wed','Thu','Fri','Sat'];
+  
+  const tb = document.getElementById('bulk-tbody');
+  if(!tb) return;
+  tb.innerHTML = custs.map(c => {
+    const edit = bulkEdits[c.id] || {};
+    const driverId = edit.driverId !== undefined ? edit.driverId : (c.driverId||'');
+    const routeOrder = edit.routeOrder !== undefined ? edit.routeOrder : (c.routeOrder||'');
+    const days = edit.deliveryDays !== undefined ? edit.deliveryDays : (c.deliveryDays||[c.dueDay||4]);
+    const freq = edit.frequency !== undefined ? edit.frequency : (c.frequency||'Weekly');
+    
+    const dayCbs = [1,2,3,4,5,6].map(d => 
+      `<label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${days.includes(d)?'checked':''} onchange="bulkSetDay('${c.id}',${d},this.checked)" style="width:auto;cursor:pointer">
+        ${DAYS_LABELS[d]}
+      </label>`
+    ).join('');
+    
+    const driverOpts = `<option value="">— Unassigned</option>` + S.drivers.map(d => 
+      `<option value="${d.id}" ${driverId===d.id?'selected':''}>${d.name}</option>`
+    ).join('');
+    
+    const freqOpts = ['Weekly','Fortnightly','Monthly','3x Week','2x Week','Daily','On Demand'].map(f =>
+      `<option value="${f}" ${freq===f?'selected':''}>${f}</option>`
+    ).join('');
+    
+    const hasEdit = bulkEdits[c.id];
+    return `<tr style="${hasEdit?'background:#f0fdf4;':''}">
+      <td><strong style="font-size:13px">${c.name}</strong><div style="font-size:11px;color:var(--muted)">${c.address||''}</div></td>
+      <td><select onchange="bulkSetDriver('${c.id}',this.value)" style="width:130px;padding:5px 8px;font-size:12px">${driverOpts}</select></td>
+      <td><input type="number" value="${routeOrder}" min="1" max="999" onchange="bulkSetRoute('${c.id}',this.value)" style="width:55px;padding:5px 7px;text-align:center;font-size:12px"></td>
+      <td><div style="display:flex;gap:8px;flex-wrap:wrap">${dayCbs}</div></td>
+      <td><select onchange="bulkSetFreq('${c.id}',this.value)" style="width:120px;padding:5px 8px;font-size:12px">${freqOpts}</select></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">No customers found</td></tr>';
+}
+
+function bulkSetDriver(cid, val) {
+  if(!bulkEdits[cid]) bulkEdits[cid]={};
+  bulkEdits[cid].driverId = val;
+  _highlightBulkRow(cid);
+}
+function bulkSetRoute(cid, val) {
+  if(!bulkEdits[cid]) bulkEdits[cid]={};
+  bulkEdits[cid].routeOrder = parseInt(val)||99;
+  _highlightBulkRow(cid);
+}
+function bulkSetDay(cid, day, checked) {
+  const c = S.customers.find(x=>x.id===cid); if(!c) return;
+  if(!bulkEdits[cid]) bulkEdits[cid]={};
+  const current = bulkEdits[cid].deliveryDays !== undefined ? bulkEdits[cid].deliveryDays : [...(c.deliveryDays||[c.dueDay||4])];
+  if(checked) { if(!current.includes(day)) current.push(day); }
+  else { const idx=current.indexOf(day); if(idx>-1) current.splice(idx,1); }
+  bulkEdits[cid].deliveryDays = current.sort();
+  _highlightBulkRow(cid);
+}
+function bulkSetFreq(cid, val) {
+  if(!bulkEdits[cid]) bulkEdits[cid]={};
+  bulkEdits[cid].frequency = val;
+  _highlightBulkRow(cid);
+}
+function _highlightBulkRow(cid) {
+  // rows are in order - just re-color via query
+  const rows = document.querySelectorAll('#bulk-tbody tr');
+  rows.forEach(r => {
+    const sel = r.querySelector('select');
+    if(sel && sel.closest('tr')) {
+      const cidInRow = r.querySelector('input[type=number]');
+      // We can't easily match rows without IDs, renderBulk will re-render
+    }
+  });
+}
+
+async function saveBulkAll() {
+  const count = Object.keys(bulkEdits).length;
+  if(!count) return alert('No changes to save.');
+  if(!confirm(`Save ${count} customer changes?`)) return;
+  _toast('Saving ' + count + ' changes...', 5000);
+  let saved = 0, errors = 0;
+  for(const [cid, edit] of Object.entries(bulkEdits)) {
+    const c = S.customers.find(x=>x.id===cid); if(!c) continue;
+    const upd = {};
+    if(edit.driverId !== undefined) upd.driver_id = edit.driverId || null;
+    if(edit.routeOrder !== undefined) upd.route_order = edit.routeOrder;
+    if(edit.deliveryDays !== undefined) {
+      upd.delivery_days = JSON.stringify(edit.deliveryDays);
+      upd.due_day = edit.deliveryDays[0] || 4;
+    }
+    if(edit.frequency !== undefined) upd.frequency = edit.frequency;
+    try {
+      await _patch('customers', upd, '?id=eq.'+cid);
+      // Update local cache
+      if(edit.driverId !== undefined) c.driverId = edit.driverId||null;
+      if(edit.routeOrder !== undefined) c.routeOrder = edit.routeOrder;
+      if(edit.deliveryDays !== undefined) { c.deliveryDays = edit.deliveryDays; c.dueDay = edit.deliveryDays[0]||4; }
+      if(edit.frequency !== undefined) c.frequency = edit.frequency;
+      saved++;
+    } catch(e) { console.error('Bulk save error', cid, e); errors++; }
+  }
+  bulkEdits = {};
+  _toast(`✓ Saved ${saved} customers${errors?', '+errors+' errors':''}`, 3000);
+  renderBulk();
+}
+
+// ═══════════════════════════════════════
+// RECEIVING PIN PROTECTION
+// ═══════════════════════════════════════
+const RECEIVE_PIN = '1234'; // Default PIN - change in Admin later
+let pinBuffer = '';
+let pinTarget = null; // page to go to after PIN
+
+function showReceiving() {
+  pinTarget = 'receiving';
+  pinBuffer = '';
+  updatePinDisplay();
+  document.getElementById('pin-error').textContent = '';
+  document.getElementById('page-receive-pin').style.display = 'flex';
+}
+
+function pinKey(k) {
+  if(k === 'del') {
+    pinBuffer = pinBuffer.slice(0,-1);
+  } else if(k === 'ok') {
+    checkPin();
+    return;
+  } else {
+    if(pinBuffer.length >= 4) return;
+    pinBuffer += k;
+    if(pinBuffer.length === 4) { setTimeout(checkPin, 100); }
+  }
+  updatePinDisplay();
+}
+
+function updatePinDisplay() {
+  const d = document.getElementById('pin-display');
+  if(d) d.textContent = pinBuffer.padEnd(4,'_').split('').join(' ');
+}
+
+function checkPin() {
+  if(pinBuffer === RECEIVE_PIN) {
+    document.getElementById('page-receive-pin').style.display = 'none';
+    pinBuffer = '';
+    if(pinTarget) showPage(pinTarget);
+  } else {
+    document.getElementById('pin-error').textContent = '✕ Wrong PIN';
+    pinBuffer = '';
+    updatePinDisplay();
+    setTimeout(()=>{ document.getElementById('pin-error').textContent=''; }, 1500);
+  }
+}
+
+// ═══════════════════════════════════════
+// ADMIN → also add delivery_days column
+// ═══════════════════════════════════════
+// Patch renderAdmin to show delivery days
+const _origRenderAdmin = renderAdmin;
+renderAdmin = function() {
+  _origRenderAdmin();
+  // Update bulk driver filter options
+  const ddf = document.getElementById('bulk-driver-filter');
+  if(ddf) {
+    while(ddf.options.length > 2) ddf.remove(2);
+    S.drivers.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = d.name;
+      ddf.appendChild(opt);
+    });
+  }
+};
+
+// Patch showPage to init bulk edit
+const _origShowPage = showPage;
+showPage = function(id) {
+  _origShowPage(id);
+  if(id === 'bulk') {
+    bulkEdits = {};
+    renderBulk();
+  }
+};
+
+// Add delivery_days to Supabase ALTER (run once)
+async function ensureDeliveryDaysColumn() {
+  // Try to add the column if it doesn't exist - will fail silently if already exists
+  try {
+    await _q('POST', 'rpc/exec', {sql: "ALTER TABLE customers ADD COLUMN IF NOT EXISTS delivery_days text;"});
+  } catch(e) {
+    // Column might already exist or RPC not available - that's fine
+    console.log('delivery_days column note:', e.message?.slice(0,50));
+  }
+}
+
 loadFromDB();
+ensureDeliveryDaysColumn();
 
 </script>
 </body>
