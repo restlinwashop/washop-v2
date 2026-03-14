@@ -1909,6 +1909,7 @@ function renderDashboard() {
     f2Grid.innerHTML = f2Keys.map(pid => {
       const d = f2Data[pid];
       const sent = _opSentTotal ? _opSentTotal(pid, dashDate) : 0;
+      const f2Available = sent - d.delivered; // physically in F2 = sent minus delivered
       const pending = d.required - d.packed - d.delivered;
       const cat = S.categories.find(c => c.id === d.catId);
       const allDone = d.delivered >= d.required;
@@ -1935,8 +1936,8 @@ function renderDashboard() {
             <div style="font-size:8px;color:#15803d;font-weight:700;text-transform:uppercase">Done</div>
           </div>
           <div style="background:#eff6ff;border-radius:6px;padding:5px 4px">
-            <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#0284c7">${sent.toLocaleString()}</div>
-            <div style="font-size:8px;color:#0284c7;font-weight:700;text-transform:uppercase">F1→F2</div>
+            <div style="font-family:'DM Mono',monospace;font-size:15px;font-weight:700;color:#0284c7">${f2Available.toLocaleString()}</div>
+            <div style="font-size:8px;color:#0284c7;font-weight:700;text-transform:uppercase">Ready</div>
           </div>
         </div>
       </div>`;
@@ -2958,7 +2959,7 @@ function renderOperation() {
       const r = required[pid];
       const sent = _opSentTotal(pid, date);
       const used = _opUsedTotal(pid, date);
-      const f2stock = sent - used;
+      const f2stock = sent - used; // F2 physical: sent minus delivered
       const remaining = Math.max(0, r.qty - sent);
       const pct = r.qty > 0 ? Math.min(100, Math.round(sent/r.qty*100)) : 0;
       const isDone = pct >= 100;
@@ -3099,9 +3100,11 @@ function _opSentTotal(productId, date) {
 }
 
 function _opUsedTotal(productId, date) {
-  // "Used" = qty in orders for this date that are packed or delivered
+  // F2 stock = Sent from F1 MINUS delivered orders
+  // Packed orders are still physically in F2 — don't deduct them
+  // Delivered orders have left F2 — deduct those
   return S.orders
-    .filter(o => o.deliveryDate === date && (o.status === 'packed' || o.status === 'delivered'))
+    .filter(o => o.deliveryDate === date && o.status === 'delivered')
     .reduce((sum, o) => {
       const it = o.items.find(x => x.productId === productId);
       return sum + (it ? it.qty : 0);
