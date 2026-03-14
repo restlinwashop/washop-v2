@@ -121,6 +121,7 @@ tr:hover td{background:#f9fafb;}
 
 /* ── KEYPAD ── */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;}
+#kp-modal{z-index:1200!important;}
 .modal-overlay.open{display:flex;}
 .modal{background:#fff;border:1px solid var(--border);border-radius:16px;padding:24px;width:310px;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .modal-lg{width:580px;max-height:90vh;overflow-y:auto;}
@@ -803,6 +804,31 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     </div>
   </div>
 
+
+  <!-- EDIT RECEIVING LOG MODAL -->
+  <div class="modal-overlay" id="erl-modal">
+    <div class="modal" style="width:500px;max-height:85vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700" id="erl-title">Edit Receiving Entry</div>
+          <div style="font-size:11px;color:var(--muted)" id="erl-sub"></div>
+        </div>
+        <button class="btn btn-sm btn-secondary" onclick="closeERL()">✕</button>
+      </div>
+      <div class="field">
+        <label>Delivery Date</label>
+        <input type="date" id="erl-date">
+      </div>
+      <div class="section-title" style="margin-bottom:8px">Quantities</div>
+      <div id="erl-items"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-danger btn-sm" onclick="deleteRecvLog()">🗑 Delete Entry</button>
+        <button class="btn btn-secondary" onclick="closeERL()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveERL()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <!-- ════ KEYPAD MODAL ════ -->
@@ -1138,7 +1164,15 @@ function renderRecvLog(){
   if(custF)entries=entries.filter(e=>e.customerId===custF);
   const tb=document.getElementById('recv-log-tbody');
   if(!entries.length){tb.innerHTML='<tr><td colspan="6" class="empty">No entries</td></tr>';document.getElementById('recv-log-cnt').textContent='0 entries';return;}
-  tb.innerHTML=entries.slice().reverse().map(e=>`<tr><td><strong>${e.customerName}</strong></td><td style="font-size:12px;max-width:250px">${e.items.map(i=>`${i.productName}(${i.qty})`).join(', ')}</td><td><span class="badge bg-blue">${e.items.reduce((a,b)=>a+b.qty,0)}</span></td><td>${fmtD(e.deliveryDate)}</td><td style="font-size:11px;color:var(--muted)">${e.receivedOn?fmtD(e.receivedOn):'today'}</td><td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${e.time}</td></tr>`).join('');
+  tb.innerHTML=entries.slice().reverse().map(e=>`<tr>
+    <td><strong>${e.customerName}</strong></td>
+    <td style="font-size:12px;max-width:250px">${e.items.map(i=>`${i.productName}(${i.qty})`).join(', ')}</td>
+    <td><span class="badge bg-blue">${e.items.reduce((a,b)=>a+b.qty,0)}</span></td>
+    <td>${fmtD(e.deliveryDate)}</td>
+    <td style="font-size:11px;color:var(--muted)">${e.receivedOn?fmtD(e.receivedOn):'today'}</td>
+    <td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${e.time}</td>
+    <td><button class="btn btn-xs btn-secondary" onclick="openEditRecvLog('${e.id}')">✏ Edit</button></td>
+  </tr>`).join('');
   document.getElementById('recv-log-cnt').textContent=entries.length+' entries';
 }
 function updateProdSummary(){
@@ -1358,15 +1392,25 @@ function openManualModal(){
 }
 function adjMO(pid,d){moQtys[pid]=Math.max(0,(moQtys[pid]||0)+d);const el=document.getElementById('moq-'+pid);if(el)el.textContent=moQtys[pid]||0;}
 function closeMO(){document.getElementById('mo-modal').classList.remove('open');}
-function saveMO(){
+async function saveMO(){
   const cid=document.getElementById('mo-cust').value;const date=document.getElementById('mo-date').value;
   if(!cid||!date)return alert('Select customer and date.');
   const items=S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
   if(!items.length)return alert('Add at least one item.');
   const c=S.customers.find(x=>x.id===cid);
-  S.orders.push({id:uid(),customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note:document.getElementById('mo-note').value,isManual:true});
-  addActivity(`Manual order: ${c.name} for ${fmtD(date)}`);
-  closeMO();renderOrders();updateOrderBadge();
+  const oid=uid();
+  const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note:document.getElementById('mo-note').value,isManual:true,checkedItems:{}};
+  // Save to DB first
+  try {
+    await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note:order.note,is_manual:true,checked_items:{}}]);
+    await _post('order_items',items.map(it=>({id:uid(),order_id:oid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
+    S.orders.push(order);
+    addActivity('Manual order: '+c.name+' for '+fmtD(date));
+    closeMO();renderOrders();updateOrderBadge();
+    _toast('✓ Manual order saved',2000);
+  } catch(e) {
+    alert('DB error: '+e.message);
+  }
 }
 
 // EDIT/DELETE ORDER (#1)
@@ -2444,16 +2488,16 @@ async function saveBulkAll() {
 
 // ═══════════════════════════════════════
 // PIN LOCK SYSTEM — 4 Access Levels
-// 1234 → Receiving only
-// 1959 → Operation + view Dispatch (read-only dispatch)
-// 3535 → Order/Pack + Dispatch + view Operation (read-only)
-// 6351 → Admin — full access
+// 2291 → Receiving only
+// 4782 → Operation + view Dispatch (read-only dispatch)
+// 3847 → Order/Pack + Dispatch + view Operation (read-only)
+// 6451 → Admin — full access
 // ═══════════════════════════════════════
 const PINS = {
-  '1234': 'receiving',   // Receiving only
-  '1959': 'operation',   // Operation + view Dispatch
-  '3535': 'order',       // Order/Pack + Dispatch + view Operation
-  '6351': 'admin',       // Full access
+  '2291': 'receiving',   // Receiving only
+  '4782': 'operation',   // Operation + view Dispatch
+  '3847': 'order',       // Order/Pack + Dispatch + view Operation
+  '6451': 'admin',       // Full access
 };
 
 // Access rules per level
@@ -3117,6 +3161,108 @@ showPage = function(id) {
   _origShowPageOp(id);
   if(id === 'operation') initOperation();
 };
+
+
+// ═══════════════════════════════════════
+// EDIT RECEIVING LOG
+// ═══════════════════════════════════════
+let erlId = null;
+
+function openEditRecvLog(id) {
+  const entry = S.receivingLog.find(e => e.id === id);
+  if(!entry) return;
+  erlId = id;
+  document.getElementById('erl-title').textContent = 'Edit — ' + entry.customerName;
+  document.getElementById('erl-sub').textContent = 'Received: ' + fmtD(entry.receivedOn) + ' · Delivery: ' + fmtD(entry.deliveryDate);
+  document.getElementById('erl-date').value = entry.deliveryDate;
+
+  // Show items with qty editors
+  document.getElementById('erl-items').innerHTML = entry.items.map(it => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-weight:600;font-size:13px">${it.productName}</span>
+      <button class="qty-btn" onclick="adjERL('${it.productId}',-1)">−</button>
+      <div class="qty-display" id="erlq-${it.productId}" style="width:80px;font-size:20px;cursor:pointer"
+        onclick="openKP('${it.productName}','Correct quantity',(v)=>{setERLqty('${it.productId}',v);},${it.qty})">${it.qty}</div>
+      <button class="qty-btn" onclick="adjERL('${it.productId}',1)">+</button>
+    </div>`).join('');
+
+  document.getElementById('erl-modal').classList.add('open');
+}
+
+function adjERL(pid, d) {
+  const entry = S.receivingLog.find(e => e.id === erlId); if(!entry) return;
+  const it = entry.items.find(x => x.productId === pid); if(!it) return;
+  it.qty = Math.max(0, it.qty + d);
+  const el = document.getElementById('erlq-'+pid); if(el) el.textContent = it.qty;
+}
+
+function setERLqty(pid, v) {
+  const entry = S.receivingLog.find(e => e.id === erlId); if(!entry) return;
+  const it = entry.items.find(x => x.productId === pid); if(it) it.qty = v;
+  const el = document.getElementById('erlq-'+pid); if(el) el.textContent = v;
+}
+
+function closeERL() {
+  document.getElementById('erl-modal').classList.remove('open');
+  erlId = null;
+}
+
+async function saveERL() {
+  const entry = S.receivingLog.find(e => e.id === erlId); if(!entry) return;
+  const newDate = document.getElementById('erl-date').value;
+  entry.deliveryDate = newDate;
+
+  // Update corresponding order items too
+  const order = S.orders.find(o =>
+    o.customerId === entry.customerId &&
+    o.deliveryDate === entry.deliveryDate &&
+    o.status === 'pending'
+  );
+
+  try {
+    // Update receiving_log_items in DB
+    for(const it of entry.items) {
+      // Find the log item by log_id + product_id
+      await _patch('receiving_log_items', {qty: it.qty},
+        '?log_id=eq.'+erlId+'&product_id=eq.'+it.productId
+      ).catch(()=>{});
+    }
+    // Update delivery date on log
+    await _patch('receiving_log', {delivery_date: newDate}, '?id=eq.'+erlId).catch(()=>{});
+
+    // If there's a matching pending order, update its items too
+    if(order) {
+      for(const it of entry.items) {
+        const oi = order.items.find(x => x.productId === it.productId);
+        if(oi) {
+          oi.qty = it.qty;
+          await _patch('order_items', {qty: it.qty}, '?id=eq.'+oi.id).catch(()=>{});
+        }
+      }
+    }
+
+    closeERL();
+    renderRecvLog();
+    renderOrders();
+    _toast('✓ Entry corrected', 2000);
+  } catch(e) {
+    _toast('Error: '+e.message, 4000);
+  }
+}
+
+async function deleteRecvLog() {
+  if(!confirm('Delete this receiving entry? This will NOT remove the associated order.')) return;
+  try {
+    await _del('receiving_log_items', '?log_id=eq.'+erlId);
+    await _del('receiving_log', '?id=eq.'+erlId);
+    S.receivingLog = S.receivingLog.filter(e => e.id !== erlId);
+    closeERL();
+    renderRecvLog();
+    _toast('Entry deleted', 2000);
+  } catch(e) {
+    _toast('Error: '+e.message, 4000);
+  }
+}
 
 async function ensureDeliveryDaysColumn() {
   // Try to add the column if it doesn't exist - will fail silently if already exists
