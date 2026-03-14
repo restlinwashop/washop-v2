@@ -288,6 +288,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   </div>
   <nav>
     <div class="nav-section">Operations</div>
+    <div class="nav-item" onclick="showPage('operation')"><span class="nav-icon">🏭</span>Operation</div>
     <div class="nav-item active" onclick="showPage('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
     <div class="nav-item" onclick="showPage('receiving')"><span class="nav-icon">📦</span>Receiving</div>
     <div class="nav-item" onclick="showPage('order')">
@@ -705,6 +706,67 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   </div>
 
   
+
+  <!-- ════ OPERATION PAGE (Factory 1) ════ -->
+  <div class="page" id="page-operation">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">🏭 Operation — Factory 1</div>
+        <div style="font-size:12px;color:var(--muted)">Track production output. Enter quantities sent to Factory 2.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:0">Preparing for:</label>
+        <input type="date" id="op-date" onchange="renderOperation()" style="width:160px">
+        <button class="btn btn-sm btn-secondary" onclick="renderOperation()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <!-- Summary bar: what's needed today -->
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-header">
+        <div class="card-title">Required for <span id="op-date-label" style="color:var(--accent2)">—</span></div>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">From Order / Pack page</span>
+      </div>
+      <div class="card-body" id="op-required-grid" style="display:flex;flex-wrap:wrap;gap:10px">
+        <div style="font-size:13px;color:var(--muted)">Select a date above</div>
+      </div>
+    </div>
+
+    <!-- Production output entry -->
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-header">
+        <div class="card-title">📦 Send to Factory 2</div>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">Enter quantities being transferred now</span>
+      </div>
+      <div class="card-body">
+        <div id="op-entry-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px">
+          <div style="color:var(--muted);font-size:13px">Select a date to load products</div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-secondary" onclick="resetOpQtys()">Reset</button>
+          <button class="btn btn-primary" onclick="saveOpTransfer()">📤 Send to Factory 2</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Running totals -->
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Factory 2 Stock (Available)</div><span style="font-size:11px;color:var(--muted);margin-left:auto">Sent − Used in Orders</span></div>
+        <div class="card-body" id="op-f2-stock">
+          <div style="color:var(--muted);font-size:13px">Loading...</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Transfer Log</div></div>
+        <div style="overflow-x:auto;max-height:320px;overflow-y:auto">
+          <table><thead><tr><th>Time</th><th>Date</th><th>Product</th><th>Qty Sent</th><th></th></tr></thead>
+          <tbody id="op-log-tbody"><tr><td colspan="5" class="empty">No transfers yet</td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <!-- ════ KEYPAD MODAL ════ -->
@@ -860,6 +922,47 @@ function getMonday(s){const d=new Date(s+'T00:00:00');const wd=d.getDay()||7;d.s
 function uid(){return 'x'+Date.now()+Math.random().toString(36).slice(2,6);}
 const FREQ_DAYS={Weekly:7,Fortnightly:14,Monthly:30,'3x Week':2,'2x Week':3,Daily:1};
 
+// Calculate next delivery date based on customer's actual delivery days
+// NOT based on today + interval — based on customer's scheduled day(s)
+function nextDeliveryDate(cust, fromDate) {
+  fromDate = fromDate || todayStr();
+  const from = new Date(fromDate + 'T00:00:00');
+  
+  // Get this customer's delivery days (1=Mon...6=Sat)
+  const days = cust.deliveryDays && cust.deliveryDays.length
+    ? cust.deliveryDays
+    : [parseInt(cust.dueDay || 4)];
+  
+  if(cust.frequency === 'Daily') return addDays(fromDate, 1);
+  if(cust.frequency === 'On Demand') return addDays(fromDate, 7);
+  
+  // Find the NEXT occurrence of any of the customer's delivery days
+  // Start from tomorrow to find next scheduled day
+  const fromWd = from.getDay(); // 0=Sun
+  
+  // Sort delivery days
+  const sortedDays = days.slice().sort((a,b) => a-b);
+  
+  // Find the next day AFTER fromDate that matches a delivery day
+  // For weekly/fortnightly/monthly: find next matching weekday
+  // For 2x/3x week: find next matching weekday
+  
+  let bestDay = null;
+  let minDiff = 999;
+  
+  for(const dd of sortedDays) {
+    // How many days until next occurrence of this weekday?
+    let diff = dd - fromWd;
+    if(diff <= 0) diff += 7; // next week
+    if(diff < minDiff) {
+      minDiff = diff;
+      bestDay = dd;
+    }
+  }
+  
+  return addDays(fromDate, minDiff);
+}
+
 // FIX: "not due" — check delivery date vs customer's scheduled pattern, NOT current date
 function isCustomerDueOnDate(cust, dateStr){
   const d=new Date(dateStr+'T00:00:00');
@@ -878,7 +981,7 @@ function prodType(prodId){const p=S.products.find(x=>x.id===prodId);return p?cat
 // ═══════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════
-const PAGE_TITLES={bulk:'Bulk Customer Editor',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
+const PAGE_TITLES={bulk:'Bulk Customer Editor',operation:'Operation — Factory 1',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -935,7 +1038,7 @@ function selectRecvCust(id){
   document.getElementById('recv-sel-bar').style.display='flex';
   document.getElementById('recv-cust-name').textContent=c.name;
   document.getElementById('recv-freq').textContent=c.frequency;
-  const dd=addDays(todayStr(),FREQ_DAYS[c.frequency]||7);
+  const dd=nextDeliveryDate(c);
   document.getElementById('recv-date').value=dd;
   document.getElementById('recv-sched').textContent=fmtD(dd);
   const drv=S.drivers.find(d=>d.id===c.driverId);
@@ -2510,6 +2613,252 @@ bulkSetRoute = function(cid, val) {
   const unsaved = document.getElementById('bulk-unsaved');
   if(unsaved) unsaved.style.display = 'inline';
   if(bulkView === 'route') setTimeout(renderRouteView, 50);
+};
+
+
+// ═══════════════════════════════════════
+// OPERATION PAGE — Factory 1
+// ═══════════════════════════════════════
+// S.opTransfers = [{id, date, productId, productName, qty, time, note}]
+// S.opUsed      = built from orders that are 'delivered' or 'packed'
+
+let opQtys = {}; // productId -> qty to send
+
+function initOperation() {
+  // Set default date to tomorrow (preparing for next day)
+  const tomorrow = addDays(todayStr(), 1);
+  const el = document.getElementById('op-date');
+  if(el && !el.value) el.value = tomorrow;
+  // Init S.opTransfers if not loaded
+  if(!S.opTransfers) S.opTransfers = [];
+  renderOperation();
+}
+
+function renderOperation() {
+  const date = document.getElementById('op-date')?.value || addDays(todayStr(),1);
+  document.getElementById('op-date-label').textContent = fmtFull(date);
+  opQtys = {};
+
+  // ── Required: sum all order items for this date ──
+  const dayOrders = S.orders.filter(o => o.deliveryDate === date);
+  const required = {}; // productName -> {qty, productId}
+  dayOrders.forEach(o => {
+    o.items.forEach(it => {
+      if(!required[it.productId]) required[it.productId] = {name: it.productName, qty: 0, catId: it.catId};
+      required[it.productId].qty += it.qty;
+    });
+  });
+
+  // Render required grid
+  const reqGrid = document.getElementById('op-required-grid');
+  const reqKeys = Object.keys(required);
+  if(reqKeys.length) {
+    reqGrid.innerHTML = reqKeys.map(pid => {
+      const r = required[pid];
+      const sent = _opSentTotal(pid, date);
+      const used = _opUsedTotal(pid, date);
+      const f2stock = sent - used;
+      const pct = r.qty > 0 ? Math.min(100, Math.round(sent/r.qty*100)) : 0;
+      const cat = S.categories.find(c => c.id === r.catId);
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;min-width:160px;flex:1">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">${r.name}</div>
+        <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--text)">${r.qty.toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">needed total</div>
+        <div style="margin-top:8px;background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden">
+          <div style="height:100%;background:${pct>=100?'var(--accent)':'var(--accent2)'};width:${pct}%;transition:width .3s"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;font-size:11px">
+          <span style="color:var(--accent2)">📤 ${sent.toLocaleString()} sent</span>
+          <span style="color:${f2stock<0?'var(--danger)':'var(--accent)'}">F2: ${f2stock.toLocaleString()}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    reqGrid.innerHTML = '<div style="font-size:13px;color:var(--muted)">No orders found for ' + fmtD(date) + '. Check Order / Pack page.</div>';
+  }
+
+  // ── Entry grid: products to send ──
+  // Show all products that have requirements OR all active products
+  const entryProds = reqKeys.length
+    ? reqKeys.map(pid => ({id: pid, name: required[pid].name, catId: required[pid].catId}))
+    : S.products;
+
+  const entryGrid = document.getElementById('op-entry-grid');
+  entryGrid.innerHTML = entryProds.map(p => {
+    const pid = p.id || p;
+    const pname = p.name || pid;
+    const cat = S.categories.find(c => c.id === p.catId);
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">${pname}
+        ${cat ? `<span class="badge ${cat.type==='towel'?'bg-blue':'bg-green'}" style="font-size:9px;margin-left:4px">${cat.type}</span>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:7px">
+        <button class="qty-btn" onclick="adjOpQty('${pid}',-10)" title="-10">−−</button>
+        <button class="qty-btn" onclick="adjOpQty('${pid}',-1)">−</button>
+        <div class="qty-display" id="opq-${pid}"
+          onclick="openKP('${pname}','Qty sending to Factory 2',(v)=>{opQtys['${pid}']=v;document.getElementById('opq-${pid}').textContent=v||0;},opQtys['${pid}']||0)"
+          style="font-size:18px;flex:1;cursor:pointer">${opQtys[pid]||0}</div>
+        <button class="qty-btn" onclick="adjOpQty('${pid}',1)">+</button>
+        <button class="qty-btn" onclick="adjOpQty('${pid}',10)" title="+10">++</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── F2 Stock ──
+  renderF2Stock(date);
+
+  // ── Transfer log ──
+  renderOpLog(date);
+}
+
+function adjOpQty(pid, d) {
+  opQtys[pid] = Math.max(0, (opQtys[pid]||0) + d);
+  const el = document.getElementById('opq-'+pid);
+  if(el) el.textContent = opQtys[pid];
+}
+
+function resetOpQtys() {
+  opQtys = {};
+  S.products.forEach(p => {
+    const el = document.getElementById('opq-'+p.id);
+    if(el) el.textContent = 0;
+  });
+}
+
+async function saveOpTransfer() {
+  const date = document.getElementById('op-date')?.value;
+  if(!date) return alert('Select a date.');
+  const entries = Object.entries(opQtys).filter(([pid,qty]) => qty > 0);
+  if(!entries.length) return alert('Enter at least one quantity.');
+  
+  if(!S.opTransfers) S.opTransfers = [];
+  const now = timeStr();
+  const newEntries = entries.map(([pid, qty]) => {
+    const p = S.products.find(x => x.id === pid);
+    return {id: uid(), date, productId: pid, productName: p?.name||pid, qty, time: now};
+  });
+  
+  // Save to Supabase op_transfers table
+  try {
+    await _post('op_transfers', newEntries.map(e => ({
+      id: e.id, date: e.date, product_id: e.productId, product_name: e.productName, qty: e.qty, time_sent: e.time
+    })));
+    S.opTransfers.push(...newEntries);
+    addActivity('Factory 1 sent: ' + entries.map(([pid,qty]) => {
+      const p = S.products.find(x=>x.id===pid);
+      return (p?.name||pid)+' ×'+qty;
+    }).join(', '));
+    resetOpQtys();
+    renderOperation();
+    _toast('✓ Transfer saved — Factory 2 stock updated', 2500);
+  } catch(e) {
+    // Table might not exist yet — save locally
+    S.opTransfers.push(...newEntries);
+    addActivity('Factory 1 transfer saved (local)');
+    resetOpQtys();
+    renderOperation();
+    _toast('Saved locally (run SQL to create op_transfers table)', 3000);
+    console.warn('op_transfers table:', e.message);
+  }
+}
+
+function _opSentTotal(productId, date) {
+  if(!S.opTransfers) return 0;
+  return S.opTransfers
+    .filter(t => t.productId === productId && t.date === date)
+    .reduce((a,b) => a+b.qty, 0);
+}
+
+function _opUsedTotal(productId, date) {
+  // "Used" = qty in orders for this date that are packed or delivered
+  return S.orders
+    .filter(o => o.deliveryDate === date && (o.status === 'packed' || o.status === 'delivered'))
+    .reduce((sum, o) => {
+      const it = o.items.find(x => x.productId === productId);
+      return sum + (it ? it.qty : 0);
+    }, 0);
+}
+
+function renderF2Stock(date) {
+  const el = document.getElementById('op-f2-stock');
+  if(!el) return;
+  
+  // Get all products that have any transfers OR orders for this date
+  const productIds = new Set();
+  (S.opTransfers||[]).filter(t => t.date === date).forEach(t => productIds.add(t.productId));
+  S.orders.filter(o => o.deliveryDate === date).forEach(o => o.items.forEach(it => productIds.add(it.productId)));
+  
+  if(!productIds.size) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">No data for this date</div>'; return; }
+  
+  const rows = [...productIds].map(pid => {
+    const p = S.products.find(x => x.id === pid);
+    const sent = _opSentTotal(pid, date);
+    const used = _opUsedTotal(pid, date);
+    const available = sent - used;
+    const required = S.orders.filter(o => o.deliveryDate === date)
+      .reduce((s,o) => s + (o.items.find(it=>it.productId===pid)?.qty||0), 0);
+    return {name: p?.name||pid, sent, used, available, required};
+  }).sort((a,b) => a.name.localeCompare(b.name));
+  
+  el.innerHTML = rows.map(r => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="flex:1;font-size:13px;font-weight:600">${r.name}</span>
+      <span style="font-size:12px;color:var(--accent2)" title="Sent from Factory 1">📤 ${r.sent}</span>
+      <span style="font-size:12px;color:var(--warn)" title="Used in packed/delivered orders">📋 ${r.used}</span>
+      <span class="badge ${r.available >= r.required ? 'bg-green' : r.available > 0 ? 'bg-warn' : 'bg-red'}" 
+        style="min-width:50px;text-align:center" title="Available in F2 / Required">
+        ${r.available} / ${r.required}
+      </span>
+    </div>`).join('');
+}
+
+function renderOpLog(date) {
+  const tb = document.getElementById('op-log-tbody');
+  if(!tb) return;
+  const entries = (S.opTransfers||[])
+    .filter(t => t.date === date)
+    .sort((a,b) => b.time.localeCompare(a.time));
+  if(!entries.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">No transfers for this date</td></tr>'; return; }
+  tb.innerHTML = entries.map(t => `
+    <tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px">${t.time}</td>
+      <td style="font-size:12px">${fmtD(t.date)}</td>
+      <td style="font-weight:600">${t.productName}</td>
+      <td><span class="badge bg-blue">${t.qty.toLocaleString()}</span></td>
+      <td><button class="btn btn-xs btn-danger" onclick="deleteOpTransfer('${t.id}')">✕</button></td>
+    </tr>`).join('');
+}
+
+async function deleteOpTransfer(id) {
+  if(!confirm('Delete this transfer entry?')) return;
+  S.opTransfers = (S.opTransfers||[]).filter(t => t.id !== id);
+  try { await _del('op_transfers', '?id=eq.'+id); } catch(e) { console.warn(e); }
+  renderOperation();
+  _toast('Entry deleted', 2000);
+}
+
+// Load op_transfers from Supabase on sync
+const _origLoadFromDB = loadFromDB;
+loadFromDB = async function() {
+  await _origLoadFromDB();
+  // Also load op_transfers
+  try {
+    const transfers = await _get('op_transfers', '?select=*&order=date.desc,time_sent.desc');
+    S.opTransfers = transfers.map(t => ({
+      id: t.id, date: t.date, productId: t.product_id, productName: t.product_name, qty: t.qty, time: t.time_sent||''
+    }));
+  } catch(e) {
+    if(!S.opTransfers) S.opTransfers = [];
+    console.log('op_transfers not loaded (table may need creating):', e.message?.slice(0,50));
+  }
+  if(document.getElementById('page-operation')?.classList.contains('active')) renderOperation();
+};
+
+// Patch showPage to init operation
+const _origShowPageOp = showPage;
+showPage = function(id) {
+  _origShowPageOp(id);
+  if(id === 'operation') initOperation();
 };
 
 async function ensureDeliveryDaysColumn() {
