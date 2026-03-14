@@ -244,6 +244,23 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 .edit-item-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
 .edit-item-row:last-child{border-bottom:none;}
 .price-cust-row{background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px;}
+
+/* Dashboard live tiles */
+@keyframes pulse-green { 0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.4)} 50%{box-shadow:0 0 0 8px rgba(22,163,74,0)} }
+@keyframes pulse-yellow { 0%,100%{box-shadow:0 0 0 0 rgba(234,179,8,.4)} 50%{box-shadow:0 0 0 8px rgba(234,179,8,0)} }
+@keyframes pulse-blue   { 0%,100%{box-shadow:0 0 0 0 rgba(2,132,199,.4)} 50%{box-shadow:0 0 0 8px rgba(2,132,199,0)} }
+.tile-done   { border-color:#16a34a!important; animation: pulse-green 2s infinite; }
+.tile-pending{ border-color:#eab308!important; animation: pulse-yellow 2s infinite; }
+.tile-ready  { border-color:#0284c7!important; animation: pulse-blue 2.5s infinite; }
+.tile-base   { border-color:var(--border); }
+.dash-tile   { background:#fff;border:2px solid var(--border);border-radius:12px;padding:16px;position:relative;overflow:hidden;transition:border-color .3s; }
+.dash-tile-label { font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px; }
+.dash-tile-product { font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:600; }
+.dash-tile-val { font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1; }
+.dash-tile-sub { font-size:11px;margin-top:6px;font-family:'DM Mono',monospace; }
+.dash-tile-bar { height:4px;border-radius:2px;margin-top:10px;background:#e5e7eb;overflow:hidden; }
+.dash-tile-bar-fill { height:100%;border-radius:2px;transition:width .5s; }
+
 </style>
 </head>
 <body>
@@ -322,25 +339,38 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 
   <!-- ════ DASHBOARD ════ -->
   <div class="page active" id="page-dashboard">
-    <div class="grid-4" style="margin-bottom:20px">
-      <div class="stat-card"><div class="stat-label">Today Received</div><div class="stat-val" id="d-recv">0</div><div class="stat-sub" id="d-recv-sub">0 customers</div></div>
-      <div class="stat-card"><div class="stat-label">Pending Orders</div><div class="stat-val" id="d-pend">0</div><div class="stat-sub">to be packed</div></div>
-      <div class="stat-card"><div class="stat-label">Packed Ready</div><div class="stat-val" id="d-packed">0</div><div class="stat-sub">awaiting dispatch</div></div>
-      <div class="stat-card"><div class="stat-label">Delivered Today</div><div class="stat-val" id="d-deliv">0</div><div class="stat-sub">completed</div></div>
-    </div>
-    <div class="card" style="margin-bottom:18px">
-      <div class="card-header">
-        <div class="card-title">Today's Received — Breakdown</div>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn btn-xs btn-secondary" id="dash-cat-btn" onclick="setDashView('category')">By Category</button>
-          <button class="btn btn-xs btn-blue" id="dash-prod-btn" onclick="setDashView('product')">By Product</button>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="ps-grid" id="d-cat-grid"><div style="font-size:12px;color:var(--muted)">No items received yet</div></div>
-        <div id="d-breakdown" style="display:none;margin-top:12px"></div>
+    <!-- Date selector -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">Operations Dashboard</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <button class="btn btn-sm btn-secondary" onclick="shiftDashDate(-1)">← Prev</button>
+        <input type="date" id="dash-date" onchange="renderDashboard()" style="width:160px;font-weight:600">
+        <button class="btn btn-sm btn-secondary" onclick="shiftDashDate(1)">Next →</button>
+        <button class="btn btn-sm btn-blue" onclick="document.getElementById('dash-date').value=todayStr();renderDashboard()">Today</button>
       </div>
     </div>
+
+    <!-- FACTORY 1 SECTION -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:4px;height:24px;background:var(--accent2);border-radius:2px"></div>
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--accent2)">🏭 FACTORY 1 — Production</div>
+      <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace" id="dash-f1-label"></div>
+    </div>
+    <div id="dash-f1-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:24px">
+      <div style="color:var(--muted);font-size:13px;padding:12px">Loading...</div>
+    </div>
+
+    <!-- FACTORY 2 SECTION -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:4px;height:24px;background:var(--accent);border-radius:2px"></div>
+      <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:var(--accent)">📦 FACTORY 2 — Orders</div>
+      <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace" id="dash-f2-label"></div>
+    </div>
+    <div id="dash-f2-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-bottom:24px">
+      <div style="color:var(--muted);font-size:13px;padding:12px">Loading...</div>
+    </div>
+
+    <!-- Bottom row: Activity + Alarms -->
     <div class="grid-2">
       <div class="card"><div class="card-header"><div class="card-title">Activity Feed</div></div><div class="card-body" id="activity-feed"><div class="empty">No activity yet</div></div></div>
       <div class="card"><div class="card-header"><div class="card-title">Stock Alarms</div></div><div class="card-body" id="d-alarms"><div class="empty" style="color:var(--accent)">✓ All stock levels OK</div></div></div>
@@ -998,6 +1028,8 @@ function showPage(id){
   if(id==='pricing')renderPricing();
 }
 document.getElementById('topbar-date').textContent=fmtFull(todayStr());
+const _dashDateEl = document.getElementById('dash-date');
+if(_dashDateEl) _dashDateEl.value = todayStr();
 document.getElementById('recv-date').value=todayStr();
 document.getElementById('prod-date').textContent=fmtFull(todayStr());
 
@@ -1743,32 +1775,124 @@ function delPkg(id){S.packages=S.packages.filter(p=>p.id!==id);renderPricing();}
 // ═══════════════════════════════════════════════
 // DASHBOARD (#7 breakdown)
 // ═══════════════════════════════════════════════
-let dashView='category';
-function setDashView(v){dashView=v;renderDashboard();}
-function renderDashboard(){
-  const tot=S.receivingLog.reduce((a,e)=>a+e.items.reduce((b,i)=>b+i.qty,0),0);
-  const uc=[...new Set(S.receivingLog.map(e=>e.customerId))].length;
-  const de=document.getElementById('d-recv');const drs=document.getElementById('d-recv-sub');
-  if(de)de.textContent=tot;if(drs)drs.textContent=uc+' customers';
-  const dp=document.getElementById('d-pend');const dk=document.getElementById('d-packed');const dd=document.getElementById('d-deliv');
-  if(dp)dp.textContent=S.orders.filter(o=>o.status==='pending').length;
-  if(dk)dk.textContent=S.orders.filter(o=>o.status==='packed').length;
-  if(dd)dd.textContent=S.orders.filter(o=>o.status==='delivered').length;
-  const grid=document.getElementById('d-cat-grid');const breakdown=document.getElementById('d-breakdown');
-  if(dashView==='category'){
-    const catTot={};S.receivingLog.forEach(e=>e.items.forEach(it=>{const cat=S.categories.find(c=>c.id===it.catId)?.name||'Other';catTot[cat]=(catTot[cat]||0)+it.qty;}));
-    const keys=Object.keys(catTot);
-    if(grid)grid.innerHTML=keys.length?keys.map(k=>`<div class="ps-item" onclick="setDashView('product')" title="Click for product breakdown"><div class="ps-label">${k}</div><div class="ps-val">${catTot[k]}</div><div class="ps-sub">↓ product view</div></div>`).join(''):'<div style="font-size:12px;color:var(--muted)">No items received yet</div>';
-    if(breakdown)breakdown.style.display='none';
-  }else{
-    const prodTot={};S.receivingLog.forEach(e=>e.items.forEach(it=>{prodTot[it.productName]=(prodTot[it.productName]||0)+it.qty;}));
-    const keys=Object.keys(prodTot).sort((a,b)=>prodTot[b]-prodTot[a]);
-    if(grid)grid.innerHTML='';
-    if(breakdown){breakdown.style.display='block';breakdown.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:8px;align-items:center"><span style="font-size:12px;font-weight:700;color:var(--muted)">BY PRODUCT</span><button class="btn btn-xs btn-secondary" onclick="setDashView('category')">← Back to categories</button></div>`+
-      (keys.length?`<table style="width:100%"><thead><tr><th>Product</th><th>Qty Received</th></tr></thead><tbody>${keys.map(k=>`<tr><td style="font-weight:600">${k}</td><td><span class="badge bg-blue" style="font-family:'DM Mono',monospace">${prodTot[k]}</span></td></tr>`).join('')}</tbody></table>`:'<div style="font-size:12px;color:var(--muted)">No data</div>');}
-  }
-  checkAlarms();
+let dashDate = todayStr();
+
+function shiftDashDate(d) {
+  dashDate = addDays(dashDate, d);
+  document.getElementById('dash-date').value = dashDate;
+  renderDashboard();
 }
+
+function renderDashboard() {
+  dashDate = document.getElementById('dash-date')?.value || todayStr();
+  const isToday = dashDate === todayStr();
+
+  // ── FACTORY 1 — what was produced/sent for this delivery date ──
+  // "Required" = sum of all order items for dashDate
+  // "Sent to F2" = op_transfers for dashDate
+  const dayOrders = S.orders.filter(o => o.deliveryDate === dashDate);
+  const f1Required = {}; // pid -> {name, qty, catId}
+  dayOrders.forEach(o => o.items.forEach(it => {
+    if(!f1Required[it.productId]) f1Required[it.productId] = {name:it.productName, qty:0, catId:it.catId};
+    f1Required[it.productId].qty += it.qty;
+  }));
+
+  const f1Grid = document.getElementById('dash-f1-grid');
+  document.getElementById('dash-f1-label').textContent = fmtFull(dashDate);
+
+  const f1Keys = Object.keys(f1Required);
+  if(!f1Keys.length) {
+    f1Grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px;grid-column:1/-1">No orders for ' + fmtD(dashDate) + '</div>';
+  } else {
+    f1Grid.innerHTML = f1Keys.map(pid => {
+      const r = f1Required[pid];
+      const sent = _opSentTotal ? _opSentTotal(pid, dashDate) : 0;
+      const pct = r.qty > 0 ? Math.min(100, Math.round(sent/r.qty*100)) : 0;
+      const isDone = pct >= 100;
+      const cat = S.categories.find(c => c.id === r.catId);
+      const typeColor = cat?.type === 'towel' ? '#0284c7' : '#16a34a';
+
+      return `<div class="dash-tile ${isDone ? 'tile-done' : sent > 0 ? 'tile-pending' : 'tile-base'}">
+        <div class="dash-tile-label" style="color:${typeColor}">${cat?.name || 'Product'}</div>
+        <div class="dash-tile-product">${r.name}</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div class="dash-tile-val" style="color:${isDone?'#16a34a':sent>0?'#eab308':'#374151'}">${sent.toLocaleString()}</div>
+          <div style="font-size:12px;color:var(--muted)">/ ${r.qty.toLocaleString()}</div>
+        </div>
+        <div class="dash-tile-sub" style="color:${isDone?'#16a34a':sent>0?'#eab308':'var(--muted)'}">
+          ${isDone ? '✓ Complete' : sent > 0 ? `${r.qty-sent} remaining` : 'Not started'}
+        </div>
+        <div class="dash-tile-bar">
+          <div class="dash-tile-bar-fill" style="width:${pct}%;background:${isDone?'#16a34a':sent>0?'#eab308':'#e5e7eb'}"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── FACTORY 2 — order status for dashDate ──
+  // Categories: pending (yellow pulsing), packed/ready (blue pulsing), delivered (green solid)
+  const f2Grid = document.getElementById('dash-f2-grid');
+  document.getElementById('dash-f2-label').textContent = fmtFull(dashDate);
+
+  // Build product totals by status
+  const f2Data = {}; // pid -> {name, catId, required, packed, delivered}
+  dayOrders.forEach(o => {
+    o.items.forEach(it => {
+      if(!f2Data[it.productId]) f2Data[it.productId] = {name:it.productName, catId:it.catId, required:0, packed:0, delivered:0};
+      f2Data[it.productId].required += it.qty;
+      if(o.status === 'packed')    f2Data[it.productId].packed    += it.qty;
+      if(o.status === 'delivered') f2Data[it.productId].delivered += it.qty;
+    });
+  });
+
+  // Also show F2 stock (from op_transfers)
+  const f2Keys = Object.keys(f2Data);
+  if(!f2Keys.length) {
+    f2Grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px;grid-column:1/-1">No orders for ' + fmtD(dashDate) + '</div>';
+  } else {
+    f2Grid.innerHTML = f2Keys.map(pid => {
+      const d = f2Data[pid];
+      const sent = _opSentTotal ? _opSentTotal(pid, dashDate) : 0;
+      const available = sent - d.packed - d.delivered; // in F2 not yet assigned to order
+      const pending = d.required - d.packed - d.delivered;
+      const cat = S.categories.find(c => c.id === d.catId);
+      const typeColor = cat?.type === 'towel' ? '#0284c7' : '#16a34a';
+
+      // Status: all delivered = done (green), some packed = in progress (blue), pending = yellow
+      const allDone = d.delivered >= d.required;
+      const inProgress = !allDone && d.packed > 0;
+      const tileClass = allDone ? 'tile-done' : inProgress ? 'tile-ready' : 'tile-pending';
+      const statusColor = allDone ? '#16a34a' : inProgress ? '#0284c7' : '#eab308';
+      const statusLabel = allDone ? '✓ All Delivered' : inProgress ? '📦 In Progress' : '⏳ Pending';
+
+      return `<div class="dash-tile ${tileClass}">
+        <div class="dash-tile-label" style="color:${typeColor}">${cat?.name||'Product'}</div>
+        <div class="dash-tile-product">${d.name}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0">
+          <div style="background:#fef3c7;border-radius:6px;padding:5px 8px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#92400e">${pending.toLocaleString()}</div>
+            <div style="font-size:9px;color:#92400e;font-weight:700">PENDING</div>
+          </div>
+          <div style="background:#dcfce7;border-radius:6px;padding:5px 8px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:#15803d">${d.delivered.toLocaleString()}</div>
+            <div style="font-size:9px;color:#15803d;font-weight:700">DONE</div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px">
+          <span>📤 F2 stock: <strong style="color:#0284c7">${sent.toLocaleString()}</strong></span>
+          <span>📋 Total: ${d.required.toLocaleString()}</span>
+        </div>
+        <div class="dash-tile-sub" style="color:${statusColor};margin-top:6px;font-weight:700">${statusLabel}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Activity & Alarms (keep existing)
+  const afEl = document.getElementById('activity-feed');
+  if(afEl && S.activity) afEl.innerHTML = (S.activity||[]).slice(0,12).map(a => `<div class="act-item"><div class="act-dot"></div><span style="flex:1;font-size:13px">${a.text}</span><span class="act-time">${a.time}</span></div>`).join('') || '<div class="empty">No activity yet</div>';
+  checkAlarms && checkAlarms();
+}
+
 function addActivity(text){if(!S.activity)S.activity=[];S.activity.unshift({text,time:timeStr()});document.getElementById('activity-feed').innerHTML=(S.activity||[]).slice(0,10).map(a=>`<div class="act-item"><div class="act-dot"></div><div style="font-size:13px;flex:1">${a.text}</div><div class="act-time">${a.time}</div></div>`).join('');}
 
 
@@ -2307,15 +2431,47 @@ async function saveBulkAll() {
 
 
 // ═══════════════════════════════════════
-// PIN LOCK SYSTEM
-// STAFF PIN  : 1234 → Receiving only
-// MANAGER PIN: 6351 → Full system
+// PIN LOCK SYSTEM — 4 Access Levels
+// 2291 → Receiving only
+// 4782 → Operation + view Dispatch (read-only dispatch)
+// 3847 → Order/Pack + Dispatch + view Operation (read-only)
+// 6451 → Admin — full access
 // ═══════════════════════════════════════
-const PIN_STAFF   = '1234';  // Receiving only
-const PIN_MANAGER = '6351';  // Full access
+const PINS = {
+  '2291': 'receiving',   // Receiving only
+  '4782': 'operation',   // Operation + view Dispatch
+  '3847': 'order',       // Order/Pack + Dispatch + view Operation
+  '6451': 'admin',       // Full access
+};
+
+// Access rules per level
+// pages: which pages can be navigated to
+// readOnly: pages visible but cannot modify
+const ACCESS = {
+  receiving: {
+    pages:    ['receiving'],
+    readOnly: [],
+    label:    'Receiving Staff'
+  },
+  operation: {
+    pages:    ['operation', 'dashboard'],
+    readOnly: ['dispatch'],
+    label:    'Operation Staff'
+  },
+  order: {
+    pages:    ['order', 'dispatch', 'dashboard'],
+    readOnly: ['operation'],
+    label:    'Order Staff'
+  },
+  admin: {
+    pages:    ['dashboard','receiving','order','dispatch','operation','stock','history','driver','bulk','admin','pricing'],
+    readOnly: [],
+    label:    'Admin'
+  }
+};
 
 let _pinBuf = '';
-let _accessLevel = null; // null=locked, 'staff'=receiving only, 'manager'=full
+let _accessLevel = null;
 
 function lockPin(k) {
   if(k === 'del') {
@@ -2341,37 +2497,12 @@ function _updateLockDisp() {
 
 function _checkLockPin() {
   const err = document.getElementById('pin-lock-err');
-  if(_pinBuf === PIN_MANAGER) {
-    _accessLevel = 'manager';
+  const level = PINS[_pinBuf];
+  if(level) {
+    _accessLevel = level;
     _pinBuf = '';
     document.getElementById('pin-lock').style.display = 'none';
-    document.getElementById('sidebar').style.display = 'flex';
-    document.getElementById('main').style.display = 'flex';
-    showPage('dashboard');
-    loadFromDB();
-  } else if(_pinBuf === PIN_STAFF) {
-    _accessLevel = 'staff';
-    _pinBuf = '';
-    document.getElementById('pin-lock').style.display = 'none';
-    // Hide entire sidebar and show only receiving
-    document.getElementById('sidebar').style.display = 'none';
-    document.getElementById('main').style.marginLeft = '0';
-    document.getElementById('main').style.display = 'flex';
-    // Show only receiving page - no topbar navigation
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('page-receiving').classList.add('active');
-    document.getElementById('page-title').textContent = 'Receiving';
-    // Add lock button to topbar
-    const tb = document.querySelector('.topbar');
-    if(tb && !document.getElementById('staff-lock-btn')) {
-      const lb = document.createElement('button');
-      lb.id = 'staff-lock-btn';
-      lb.textContent = '🔒 Lock';
-      lb.className = 'btn btn-sm btn-secondary';
-      lb.style.marginLeft = 'auto';
-      lb.onclick = lockSystem;
-      tb.appendChild(lb);
-    }
+    _applyAccessLevel(level);
     loadFromDB();
   } else {
     if(err) err.textContent = '✕ Wrong PIN — try again';
@@ -2381,16 +2512,130 @@ function _checkLockPin() {
   }
 }
 
+function _applyAccessLevel(level) {
+  const acc = ACCESS[level];
+  const sidebar = document.getElementById('sidebar');
+  const main = document.getElementById('main');
+  
+  // Show main UI
+  main.style.display = 'flex';
+  
+  if(level === 'receiving') {
+    // No sidebar — full screen receiving
+    sidebar.style.display = 'none';
+    main.style.marginLeft = '0';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-receiving').classList.add('active');
+    document.getElementById('page-title').textContent = 'Receiving';
+  } else {
+    sidebar.style.display = 'flex';
+    main.style.marginLeft = '';
+    // Filter nav items
+    _buildNav(level);
+    showPage(acc.pages[0]);
+  }
+  
+  // Add lock button + level badge to topbar
+  const tb = document.querySelector('.topbar');
+  if(tb && !document.getElementById('lock-btn')) {
+    const badge = document.createElement('span');
+    badge.id = 'access-badge';
+    badge.textContent = acc.label;
+    badge.style.cssText = 'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);padding:3px 8px;background:var(--surface2);border-radius:4px;';
+    const lb = document.createElement('button');
+    lb.id = 'lock-btn';
+    lb.innerHTML = '🔒';
+    lb.className = 'btn btn-sm btn-secondary';
+    lb.title = 'Lock system';
+    lb.style.marginLeft = '8px';
+    lb.onclick = lockSystem;
+    const dateEl = document.getElementById('topbar-date');
+    if(dateEl) { tb.insertBefore(badge, dateEl); tb.insertBefore(lb, dateEl); }
+    else { tb.appendChild(badge); tb.appendChild(lb); }
+  }
+}
+
+function _buildNav(level) {
+  const acc = ACCESS[level];
+  // Add data-page to all nav items, hide inaccessible ones
+  document.querySelectorAll('.nav-item[onclick]').forEach(item => {
+    const match = item.getAttribute('onclick').match(/showPage\('([^']+)'\)/);
+    if(!match) return;
+    const page = match[1];
+    const canAccess = acc.pages.includes(page) || acc.readOnly.includes(page);
+    item.style.display = canAccess ? '' : 'none';
+    if(acc.readOnly.includes(page)) {
+      item.style.opacity = '0.5';
+      item.setAttribute('title', 'View only');
+    }
+  });
+  // Hide nav sections if all items hidden
+  document.querySelectorAll('.nav-section').forEach(sec => {
+    let next = sec.nextElementSibling;
+    let hasVisible = false;
+    while(next && !next.classList.contains('nav-section')) {
+      if(next.classList.contains('nav-item') && next.style.display !== 'none') hasVisible = true;
+      next = next.nextElementSibling;
+    }
+    sec.style.display = hasVisible ? '' : 'none';
+  });
+}
+
+// Intercept showPage to enforce access control
+const _showPageOriginal = showPage;
+showPage = function(id) {
+  if(_accessLevel) {
+    const acc = ACCESS[_accessLevel];
+    if(!acc.pages.includes(id) && !acc.readOnly.includes(id)) {
+      _toast('Access denied for this section', 2000);
+      return;
+    }
+    // Read-only pages: show but disable interactive elements
+    if(acc.readOnly.includes(id)) {
+      _showPageOriginal(id);
+      setTimeout(() => _applyReadOnly(id), 100);
+      return;
+    }
+  }
+  _showPageOriginal(id);
+};
+
+function _applyReadOnly(pageId) {
+  const page = document.getElementById('page-'+pageId);
+  if(!page) return;
+  // Disable all buttons and inputs except navigation
+  page.querySelectorAll('button, input[type=button], select').forEach(el => {
+    if(!el.classList.contains('nav-item')) el.disabled = true;
+  });
+  // Add read-only banner
+  if(!page.querySelector('.readonly-banner')) {
+    const banner = document.createElement('div');
+    banner.className = 'readonly-banner';
+    banner.style.cssText = 'background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:8px 16px;font-size:12px;color:#92400e;font-weight:600;margin-bottom:14px;';
+    banner.textContent = '👁 View only — your access level cannot modify this section';
+    page.insertBefore(banner, page.firstChild);
+  }
+}
+
 function lockSystem() {
   _accessLevel = null;
   _pinBuf = '';
   _updateLockDisp();
   document.getElementById('pin-lock').style.display = 'flex';
-  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
   document.getElementById('main').style.marginLeft = '';
-  // Remove staff lock button
-  const lb = document.getElementById('staff-lock-btn');
-  if(lb) lb.remove();
+  // Remove lock button and badge
+  ['lock-btn','access-badge'].forEach(id => { const el=document.getElementById(id); if(el) el.remove(); });
+  // Remove read-only banners
+  document.querySelectorAll('.readonly-banner').forEach(b => b.remove());
+  // Re-enable all disabled elements
+  document.querySelectorAll('[disabled]').forEach(el => el.disabled = false);
+  // Show all nav items (reset)
+  document.querySelectorAll('.nav-item,.nav-section').forEach(el => {
+    el.style.display = '';
+    el.style.opacity = '';
+  });
 }
 
 // Show lock screen on load - hide main UI until PIN entered
