@@ -249,6 +249,38 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 <body>
 
 <!-- ═══ SIDEBAR ═══ -->
+
+<!-- ═══ PIN LOCK SCREEN ═══ -->
+<div id="pin-lock" style="display:flex;position:fixed;inset:0;background:#0f1120;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:18px">
+  <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#4ade80;letter-spacing:-1px">WashOps</div>
+  <div style="font-size:13px;color:#6b7591;margin-bottom:4px">Enter PIN to continue</div>
+  <div id="pin-disp" style="font-family:'DM Mono',monospace;font-size:40px;font-weight:600;color:#fff;letter-spacing:12px;min-width:140px;text-align:center;padding:14px 0">_ _ _ _</div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:230px">
+    <button onclick="lockPin('1')" class="pin-k">1</button>
+    <button onclick="lockPin('2')" class="pin-k">2</button>
+    <button onclick="lockPin('3')" class="pin-k">3</button>
+    <button onclick="lockPin('4')" class="pin-k">4</button>
+    <button onclick="lockPin('5')" class="pin-k">5</button>
+    <button onclick="lockPin('6')" class="pin-k">6</button>
+    <button onclick="lockPin('7')" class="pin-k">7</button>
+    <button onclick="lockPin('8')" class="pin-k">8</button>
+    <button onclick="lockPin('9')" class="pin-k">9</button>
+    <button onclick="lockPin('del')" class="pin-k pin-del">⌫</button>
+    <button onclick="lockPin('0')" class="pin-k">0</button>
+    <button onclick="lockPin('ok')" class="pin-k pin-ok">OK</button>
+  </div>
+  <div id="pin-lock-err" style="color:#f87171;font-size:13px;min-height:20px;font-weight:600"></div>
+  <div style="font-size:10px;color:#374151;margin-top:8px">restlin.com.au · WashOps v8</div>
+</div>
+
+<style>
+.pin-k{height:64px;border-radius:12px;background:#1e2235;border:1.5px solid #2d3348;color:#fff;font-size:24px;font-weight:600;cursor:pointer;transition:all .1s;font-family:'DM Mono',monospace;}
+.pin-k:hover,.pin-k:active{background:#2d3348;border-color:#4ade80;}
+.pin-del{color:#f87171;font-size:20px;}
+.pin-ok{background:#16a34a!important;border-color:#16a34a!important;font-size:18px!important;}
+.pin-ok:hover{background:#15803d!important;}
+</style>
+
 <aside id="sidebar">
   <div class="logo">
     <div class="logo-mark">WashOps</div>
@@ -257,7 +289,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   <nav>
     <div class="nav-section">Operations</div>
     <div class="nav-item active" onclick="showPage('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
-    <div class="nav-item" onclick="showReceiving()"><span class="nav-icon">📦</span>Receiving <span style="font-size:10px;margin-left:auto;color:var(--sidebar-muted)">🔒</span></div>
+    <div class="nav-item" onclick="showPage('receiving')"><span class="nav-icon">📦</span>Receiving</div>
     <div class="nav-item" onclick="showPage('order')">
       <span class="nav-icon">🗂️</span>Order / Pack
       <span class="nav-badge" id="order-badge" style="display:none">0</span>
@@ -629,29 +661,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     </div>
   </div>
 
-  <!-- RECEIVE PIN PAGE -->
-  <div class="page" id="page-receive-pin" style="display:none;position:fixed;inset:0;background:#1e2235;z-index:500;align-items:center;justify-content:center;flex-direction:column;gap:20px">
-    <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#4ade80">WashOps</div>
-    <div style="font-size:14px;color:#9ca3af;margin-bottom:8px">Enter Receiving PIN</div>
-    <div id="pin-display" style="font-family:'DM Mono',monospace;font-size:36px;font-weight:600;color:#fff;letter-spacing:8px;min-width:120px;text-align:center">____</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:220px">
-      <button onclick="pinKey('1')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">1</button>
-      <button onclick="pinKey('2')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">2</button>
-      <button onclick="pinKey('3')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">3</button>
-      <button onclick="pinKey('4')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">4</button>
-      <button onclick="pinKey('5')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">5</button>
-      <button onclick="pinKey('6')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">6</button>
-      <button onclick="pinKey('7')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">7</button>
-      <button onclick="pinKey('8')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">8</button>
-      <button onclick="pinKey('9')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">9</button>
-      <button onclick="pinKey('del')" style="height:60px;border-radius:10px;background:#3d2020;border:none;color:#f87171;font-size:18px;cursor:pointer">⌫</button>
-      <button onclick="pinKey('0')" style="height:60px;border-radius:10px;background:#2d3348;border:none;color:#fff;font-size:22px;font-weight:600;cursor:pointer">0</button>
-      <button onclick="pinKey('ok')" style="height:60px;border-radius:10px;background:#16a34a;border:none;color:#fff;font-size:18px;font-weight:700;cursor:pointer">OK</button>
-    </div>
-    <div id="pin-error" style="color:#f87171;font-size:13px;min-height:20px"></div>
-    <div style="font-size:11px;color:#6b7591;margin-top:10px">Default PIN: 1234 · Change in Admin → Settings</div>
-  </div>
-
+  
 </main>
 
 <!-- ════ KEYPAD MODAL ════ -->
@@ -2144,83 +2154,101 @@ async function saveBulkAll() {
   renderBulk();
 }
 
-// ═══════════════════════════════════════
-// RECEIVING PIN PROTECTION
-// ═══════════════════════════════════════
-const RECEIVE_PIN = '1234'; // Default PIN - change in Admin later
-let pinBuffer = '';
-let pinTarget = null; // page to go to after PIN
 
-function showReceiving() {
-  pinTarget = 'receiving';
-  pinBuffer = '';
-  updatePinDisplay();
-  document.getElementById('pin-error').textContent = '';
-  document.getElementById('page-receive-pin').style.display = 'flex';
-}
+// ═══════════════════════════════════════
+// PIN LOCK SYSTEM
+// STAFF PIN  : 1234 → Receiving only
+// MANAGER PIN: 6351 → Full system
+// ═══════════════════════════════════════
+const PIN_STAFF   = '1234';  // Receiving only
+const PIN_MANAGER = '6351';  // Full access
 
-function pinKey(k) {
+let _pinBuf = '';
+let _accessLevel = null; // null=locked, 'staff'=receiving only, 'manager'=full
+
+function lockPin(k) {
   if(k === 'del') {
-    pinBuffer = pinBuffer.slice(0,-1);
+    _pinBuf = _pinBuf.slice(0,-1);
   } else if(k === 'ok') {
-    checkPin();
+    _checkLockPin();
     return;
   } else {
-    if(pinBuffer.length >= 4) return;
-    pinBuffer += k;
-    if(pinBuffer.length === 4) { setTimeout(checkPin, 100); }
+    if(_pinBuf.length >= 4) return;
+    _pinBuf += k;
+    if(_pinBuf.length === 4) setTimeout(_checkLockPin, 80);
   }
-  updatePinDisplay();
+  _updateLockDisp();
 }
 
-function updatePinDisplay() {
-  const d = document.getElementById('pin-display');
-  if(d) d.textContent = pinBuffer.padEnd(4,'_').split('').join(' ');
+function _updateLockDisp() {
+  const d = document.getElementById('pin-disp');
+  if(d) {
+    const filled = _pinBuf.length;
+    d.textContent = ['●','●','●','●'].map((c,i) => i < filled ? '●' : '_').join(' ');
+  }
 }
 
-function checkPin() {
-  if(pinBuffer === RECEIVE_PIN) {
-    document.getElementById('page-receive-pin').style.display = 'none';
-    pinBuffer = '';
-    if(pinTarget) showPage(pinTarget);
+function _checkLockPin() {
+  const err = document.getElementById('pin-lock-err');
+  if(_pinBuf === PIN_MANAGER) {
+    _accessLevel = 'manager';
+    _pinBuf = '';
+    document.getElementById('pin-lock').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('main').style.display = 'flex';
+    showPage('dashboard');
+    loadFromDB();
+  } else if(_pinBuf === PIN_STAFF) {
+    _accessLevel = 'staff';
+    _pinBuf = '';
+    document.getElementById('pin-lock').style.display = 'none';
+    // Hide entire sidebar and show only receiving
+    document.getElementById('sidebar').style.display = 'none';
+    document.getElementById('main').style.marginLeft = '0';
+    document.getElementById('main').style.display = 'flex';
+    // Show only receiving page - no topbar navigation
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-receiving').classList.add('active');
+    document.getElementById('page-title').textContent = 'Receiving';
+    // Add lock button to topbar
+    const tb = document.querySelector('.topbar');
+    if(tb && !document.getElementById('staff-lock-btn')) {
+      const lb = document.createElement('button');
+      lb.id = 'staff-lock-btn';
+      lb.textContent = '🔒 Lock';
+      lb.className = 'btn btn-sm btn-secondary';
+      lb.style.marginLeft = 'auto';
+      lb.onclick = lockSystem;
+      tb.appendChild(lb);
+    }
+    loadFromDB();
   } else {
-    document.getElementById('pin-error').textContent = '✕ Wrong PIN';
-    pinBuffer = '';
-    updatePinDisplay();
-    setTimeout(()=>{ document.getElementById('pin-error').textContent=''; }, 1500);
+    if(err) err.textContent = '✕ Wrong PIN — try again';
+    _pinBuf = '';
+    _updateLockDisp();
+    setTimeout(() => { if(err) err.textContent = ''; }, 1500);
   }
 }
 
-// ═══════════════════════════════════════
-// ADMIN → also add delivery_days column
-// ═══════════════════════════════════════
-// Patch renderAdmin to show delivery days
-const _origRenderAdmin = renderAdmin;
-renderAdmin = function() {
-  _origRenderAdmin();
-  // Update bulk driver filter options
-  const ddf = document.getElementById('bulk-driver-filter');
-  if(ddf) {
-    while(ddf.options.length > 2) ddf.remove(2);
-    S.drivers.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.id; opt.textContent = d.name;
-      ddf.appendChild(opt);
-    });
-  }
-};
+function lockSystem() {
+  _accessLevel = null;
+  _pinBuf = '';
+  _updateLockDisp();
+  document.getElementById('pin-lock').style.display = 'flex';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('main').style.marginLeft = '';
+  // Remove staff lock button
+  const lb = document.getElementById('staff-lock-btn');
+  if(lb) lb.remove();
+}
 
-// Patch showPage to init bulk edit
-const _origShowPage = showPage;
-showPage = function(id) {
-  _origShowPage(id);
-  if(id === 'bulk') {
-    bulkEdits = {};
-    renderBulk();
-  }
-};
+// Show lock screen on load - hide main UI until PIN entered
+(function initLock() {
+  document.getElementById('sidebar').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+})();
 
-// Add delivery_days to Supabase ALTER (run once)
+
 async function ensureDeliveryDaysColumn() {
   // Try to add the column if it doesn't exist - will fail silently if already exists
   try {
