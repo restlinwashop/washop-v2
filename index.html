@@ -3020,9 +3020,10 @@ function renderOperation() {
         ${cat ? `<span class="badge ${catType==='towel'?'bg-blue':'bg-green'}" style="font-size:9px">${cat.name}</span>` : ''}
       </div>
       <div id="opq-${pid}"
-        onclick="openKP('${pname}','How many sending to Factory 2?',(v)=>{opQtys['${pid}']=v;renderOperation();},${qty})"
-        style="font-family:'Syne',sans-serif;font-size:42px;font-weight:800;text-align:center;
-               color:${qty>0?'#16a34a':'#9ca3af'};cursor:pointer;padding:14px 0;
+        onclick="openKP('${pname}','How many sending to Factory 2?',(v)=>{opQtys['${pid}']=v;_updateOpCard('${pid}',v);},${qty})"
+        style="font-family:'DM Mono',monospace;font-size:48px;font-weight:500;text-align:center;
+               letter-spacing:-1px;line-height:1.2;
+               color:${qty>0?'#16a34a':'#9ca3af'};cursor:pointer;padding:16px 0;
                background:${qty>0?'#f0fdf4':'#f9fafb'};border-radius:10px;
                border:2px dashed ${qty>0?'#86efac':'#e5e7eb'};
                transition:all .15s;user-select:none;-webkit-tap-highlight-color:transparent">
@@ -3292,6 +3293,23 @@ async function deleteRecvLog() {
     _toast('Entry deleted', 2000);
   } catch(e) {
     _toast('Error: '+e.message, 4000);
+  }
+}
+
+
+function _updateOpCard(pid, qty) {
+  const el = document.getElementById('opq-'+pid);
+  if(!el) return;
+  el.textContent = qty.toLocaleString();
+  el.style.color = qty > 0 ? '#16a34a' : '#9ca3af';
+  el.style.background = qty > 0 ? '#f0fdf4' : '#f9fafb';
+  el.style.border = '2px dashed ' + (qty > 0 ? '#86efac' : '#e5e7eb');
+  // Also update parent card border
+  const card = el.closest('div[style*="border-radius:14px"]');
+  if(card) {
+    const p = card.querySelector('[class*="badge"]');
+    // update border color
+    card.style.borderColor = qty > 0 ? '#86efac' : '#e2e4ec';
   }
 }
 
