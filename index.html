@@ -979,7 +979,7 @@ const S = {
 
 // Per-customer assigned products (default: all)
 let custProds = {};
-function getCustProds(cid){if(!custProds[cid])custProds[cid]=new Set(S.products.map(p=>p.id));return custProds[cid];}
+function getCustProds(cid){if(!custProds[cid])custProds[cid]=new Set();return custProds[cid];}
 
 // ═══════════════════════════════════════════════
 // HELPERS
@@ -1712,13 +1712,71 @@ function saveCCstock(){
 }
 function renderCCprods(){
   const assigned=getCustProds(ccId);
-  document.getElementById('cc-prod-list').innerHTML=S.categories.map(cat=>`
+  const totalProds = S.products.length;
+  const assignedCount = S.products.filter(p=>assigned.has(p.id)).length;
+  document.getElementById('cc-prod-list').innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--muted)">${assignedCount} of ${totalProds} selected</span>
+      <button class="btn btn-xs btn-secondary" onclick="selectAllProds()">✓ Select All</button>
+      <button class="btn btn-xs btn-danger" onclick="unselectAllProds()">✕ Unselect All</button>
+    </div>
+  `+S.categories.map(cat=>`
     <div style="margin-bottom:14px">
-      <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">${cat.name} <span class="badge bg-${cat.type==='towel'?'blue':'green'}">${cat.type}</span></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">${cat.name}</span>
+        <span class="badge bg-${cat.type==='towel'?'blue':'green'}">${cat.type}</span>
+        <button class="btn btn-xs btn-secondary" style="font-size:10px;padding:2px 7px" onclick="selectCatProds('${cat.id}')">All</button>
+        <button class="btn btn-xs btn-danger" style="font-size:10px;padding:2px 7px" onclick="unselectCatProds('${cat.id}')">None</button>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:7px">
         ${S.products.filter(p=>p.catId===cat.id).map(p=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;background:var(--surface2);padding:6px 11px;border-radius:6px;border:1px solid var(--border)"><input type="checkbox" ${assigned.has(p.id)?'checked':''} onchange="toggleCustProd('${ccId}','${p.id}',this.checked)" style="width:auto">${p.name}</label>`).join('')}
       </div>
     </div>`).join('');
+}
+
+function selectAllProds() {
+  const s = getCustProds(ccId);
+  S.products.forEach(p => {
+    if(!s.has(p.id)) {
+      s.add(p.id);
+      _post('cust_products',[{cust_id:ccId,product_id:p.id}]).catch(()=>{});
+    }
+  });
+  renderCCprods();
+}
+
+function unselectAllProds() {
+  if(!confirm('Remove all products from this customer?')) return;
+  const s = getCustProds(ccId);
+  S.products.forEach(p => {
+    if(s.has(p.id)) {
+      s.delete(p.id);
+      _del('cust_products','?cust_id=eq.'+ccId+'&product_id=eq.'+p.id).catch(()=>{});
+    }
+  });
+  renderCCprods();
+}
+
+function selectCatProds(catId) {
+  const s = getCustProds(ccId);
+  S.products.filter(p=>p.catId===catId).forEach(p => {
+    if(!s.has(p.id)) {
+      s.add(p.id);
+      _post('cust_products',[{cust_id:ccId,product_id:p.id}]).catch(()=>{});
+    }
+  });
+  renderCCprods();
+}
+
+function unselectCatProds(catId) {
+  const s = getCustProds(ccId);
+  S.products.filter(p=>p.catId===catId).forEach(p => {
+    if(s.has(p.id)) {
+      s.delete(p.id);
+      _del('cust_products','?cust_id=eq.'+ccId+'&product_id=eq.'+p.id).catch(()=>{});
+    }
+  });
+  renderCCprods();
 }
 function toggleCustProd(cid,pid,checked){const s=getCustProds(cid);if(checked)s.add(pid);else s.delete(pid);}
 function renderCChistory(){
