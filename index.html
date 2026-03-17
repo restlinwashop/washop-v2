@@ -1753,6 +1753,7 @@ function renderAdmin(){
       <div class="ali-meta">${drv?drv.name+' #'+(c.routeOrder||'—'):'Unassigned'}</div>
       <span class="badge ${c.active?'bg-green':'bg-gray'}">${c.active?'ACTIVE':'INACTIVE'}</span>
       <span style="font-size:12px;color:var(--accent2)">→ Open</span>
+      <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();deleteCustomer('${c.id}','${c.name.replace(/&#39;/g,'')}')">Delete</button>
     </div>`;
   }).join('')||'<div class="empty">No customers</div>';
   // Drivers
@@ -2517,7 +2518,7 @@ function renderBulk() {
     return `<tr style="${hasEdit?'background:#f0fdf4;':''}">
       <td><strong style="font-size:13px">${c.name}</strong><div style="font-size:11px;color:var(--muted)">${c.address||''}</div></td>
       <td><select onchange="bulkSetDriver('${c.id}',this.value)" style="width:130px;padding:5px 8px;font-size:12px">${driverOpts}</select></td>
-      <td><input type="number" value="${routeOrder}" min="1" max="999" onchange="bulkSetRoute('${c.id}',this.value)" style="width:55px;padding:5px 7px;text-align:center;font-size:12px"></td>
+      <td><input type="number" value="${routeOrder}" min="1" max="999" onchange="bulkSetRoute('${c.id}',this.value,'${did}',${day})" style="width:55px;padding:5px 7px;text-align:center;font-size:12px"></td>
       <td><div style="display:flex;gap:8px;flex-wrap:wrap">${dayCbs}</div></td>
       <td><select onchange="bulkSetFreq('${c.id}',this.value)" style="width:120px;padding:5px 8px;font-size:12px">${freqOpts}</select></td>
     </tr>`;
@@ -2529,9 +2530,14 @@ function bulkSetDriver(cid, val) {
   bulkEdits[cid].driverId = val;
   _highlightBulkRow(cid);
 }
-function bulkSetRoute(cid, val) {
+function bulkSetRoute(cid, val, forDriver, forDay) {
   if(!bulkEdits[cid]) bulkEdits[cid]={};
   bulkEdits[cid].routeOrder = parseInt(val)||99;
+  // Also store per-day route if we know which driver/day context
+  if(forDriver && forDay) {
+    if(!bulkEdits[cid].dayRoutes) bulkEdits[cid].dayRoutes = {};
+    bulkEdits[cid].dayRoutes[forDriver+'_'+forDay] = parseInt(val)||99;
+  }
   _highlightBulkRow(cid);
 }
 function bulkSetDay(cid, day, checked) {
@@ -2583,6 +2589,15 @@ async function saveBulkAll() {
       if(edit.routeOrder !== undefined) c.routeOrder = edit.routeOrder;
       if(edit.deliveryDays !== undefined) { c.deliveryDays = edit.deliveryDays; c.dueDay = edit.deliveryDays[0]||4; }
       if(edit.frequency !== undefined) c.frequency = edit.frequency;
+      // Update dayDrivers route orders if changed in route view
+      if(edit.dayRoutes && c.dayDrivers) {
+        Object.entries(edit.dayRoutes).forEach(([key, ro]) => {
+          const [drvId, dy] = key.split('_');
+          const dd = c.dayDrivers.find(x => x.driverId===drvId && x.day===parseInt(dy));
+          if(dd) dd.routeOrder = ro;
+        });
+        await _patch('customers', {day_drivers: JSON.stringify(c.dayDrivers)}, '?id=eq.'+cid).catch(()=>{});
+      }
       saved++;
     } catch(e) { console.error('Bulk save error', cid, e); errors++; }
   }
@@ -2837,23 +2852,44 @@ function renderRouteView() {
   const DAYS = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const drv = S.drivers.find(d=>d.id===did);
   
-  // Get customers for this driver who have this day in deliveryDays
-  let custs = S.customers.filter(c => {
-    if(c.driverId !== did) return false;
-    const days = c.deliveryDays && c.deliveryDays.length ? c.deliveryDays : [c.dueDay||4];
-    return days.includes(day);
+  // Get customers for this driver on this day
+  // Check both primary driverId AND dayDrivers array entries
+  let custsWithRoute = [];
+  S.customers.filter(c => c.active !== 0).forEach(c => {
+    // Check dayDrivers first (multi-day assignments)
+    if(c.dayDrivers && c.dayDrivers.length) {
+      const match = c.dayDrivers.find(dd => dd.driverId === did && dd.day === day);
+      if(match) {
+        custsWithRoute.push({cust: c, routeOrder: match.routeOrder || c.routeOrder || 99});
+      }
+    } else {
+      // Fall back to primary driver + deliveryDays
+      if(c.driverId === did) {
+        const days = c.deliveryDays && c.deliveryDays.length ? c.deliveryDays : [c.dueDay||4];
+        if(days.includes(day)) {
+          custsWithRoute.push({cust: c, routeOrder: c.routeOrder || 99});
+        }
+      }
+    }
   });
+  let custs = custsWithRoute.map(x => x.cust);
   
   if(!custs.length) {
     rl.innerHTML = `<div class="empty">${drv?.name} has no customers on ${DAYS[day]}</div>`;
     return;
   }
   
-  // Sort by current routeOrder
+  // Sort by per-day route order
   custs = custs.slice().sort((a,b) => {
-    const ao = (bulkEdits[a.id]?.routeOrder) ?? (a.routeOrder||99);
-    const bo = (bulkEdits[b.id]?.routeOrder) ?? (b.routeOrder||99);
-    return ao - bo;
+    const getRO = (c) => {
+      if(bulkEdits[c.id]?.routeOrder !== undefined) return bulkEdits[c.id].routeOrder;
+      if(c.dayDrivers && c.dayDrivers.length) {
+        const dd = c.dayDrivers.find(x => x.driverId===did && x.day===day);
+        if(dd) return dd.routeOrder || 99;
+      }
+      return c.routeOrder || 99;
+    };
+    return getRO(a) - getRO(b);
   });
   
   rl.innerHTML = `
@@ -2869,7 +2905,16 @@ function renderRouteView() {
       </tr></thead>
       <tbody>
         ${custs.map((c,i) => {
-          const ro = (bulkEdits[c.id]?.routeOrder) ?? (c.routeOrder||'');
+          // Get per-day route order
+          let ro;
+          if(bulkEdits[c.id]?.routeOrder !== undefined) {
+            ro = bulkEdits[c.id].routeOrder;
+          } else if(c.dayDrivers && c.dayDrivers.length) {
+            const dd = c.dayDrivers.find(x => x.driverId===did && x.day===day);
+            ro = dd ? (dd.routeOrder||'') : (c.routeOrder||'');
+          } else {
+            ro = c.routeOrder||'';
+          }
           const edited = !!bulkEdits[c.id];
           return `<tr style="${edited?'background:#f0fdf4;':''}">
             <td><input type="number" value="${ro}" min="1" max="999"
@@ -3449,6 +3494,20 @@ async function toggleProdTrack(pid, tracked) {
     _toast('Saved locally', 1500);
   }
   renderAdmin();
+}
+
+
+async function deleteCustomer(id, name) {
+  if(!confirm('Delete customer "' + name + '"?\n\nThis will NOT delete their order history.')) return;
+  try {
+    await _del('cust_products', '?cust_id=eq.' + id).catch(()=>{});
+    await _del('customers', '?id=eq.' + id);
+    S.customers = S.customers.filter(c => c.id !== id);
+    _toast('✓ Customer deleted: ' + name, 2500);
+    renderAdmin();
+  } catch(e) {
+    alert('Error deleting customer: ' + e.message);
+  }
 }
 
 async function ensureDeliveryDaysColumn() {
