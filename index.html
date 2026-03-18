@@ -2362,8 +2362,20 @@ removeCat = async function(id) {
 
 const _origRemoveProd = removeProd;
 removeProd = async function(id) {
-  try { await _del('products','?id=eq.'+id); } catch(e) { console.warn(e); }
-  S.products = S.products.filter(p=>p.id!==id); renderAdmin();
+  const p = S.products.find(x=>x.id===id);
+  if(!p) return;
+  if(!confirm('Remove product "'+p.name+'"?\nThis will also remove it from all customer assignments.')) return;
+  try {
+    await _del('cust_products','?product_id=eq.'+id);
+    await _del('products','?id=eq.'+id);
+    S.products = S.products.filter(x=>x.id!==id);
+    // Remove from all custProds sets
+    Object.values(custProds).forEach(s => s.delete(id));
+    renderAdmin();
+    _toast('✓ Product removed', 2000);
+  } catch(e) {
+    alert('Error removing product: '+e.message);
+  }
 };
 
 // saveCCdetails
