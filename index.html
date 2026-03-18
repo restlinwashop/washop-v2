@@ -2635,9 +2635,14 @@ toggleCustProd = async function(cid, pid, checked) {
       await _post('cust_products', [{cust_id:cid, product_id:pid}]);
       _toast('✓ '+prodName+' added', 1500);
     } catch(e) {
-      s.delete(pid); // revert local
-      _toast('✗ Failed to save: '+e.message.slice(0,60), 4000);
-      renderCCprods(); // re-render to show correct state
+      if(e.message.includes('23505')) {
+        // Already exists in DB — just keep local state as-is, no error
+        _toast('✓ '+prodName+' already saved', 1500);
+      } else {
+        s.delete(pid); // revert local
+        _toast('✗ Failed to save: '+e.message.slice(0,60), 4000);
+        renderCCprods();
+      }
     }
   } else {
     s.delete(pid);
@@ -4016,10 +4021,17 @@ async function saveAllProds() {
   try {
     // Delete all existing assignments for this customer
     await _del('cust_products', '?cust_id=eq.'+ccId);
-    // Re-insert all currently selected
+    // Re-insert all currently selected (after delete, no duplicate risk)
     const rows = [...s].map(pid => ({cust_id: ccId, product_id: pid}));
     if(rows.length) {
-      await _post('cust_products', rows);
+      // Use upsert to be safe
+      const url = _SURL + '/rest/v1/cust_products';
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {..._hdr('POST'), 'Prefer': 'resolution=merge-duplicates'},
+        body: JSON.stringify(rows)
+      });
+      if(!res.ok) { const t = await res.text(); throw new Error(t.slice(0,100)); }
     }
     btn.textContent = '✓ Saved!';
     btn.style.background = '#16a34a';
