@@ -579,9 +579,37 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
           <button class="btn btn-primary" style="height:40px;margin-top:21px" onclick="addCustomer()">Add</button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <div class="section-title" style="margin-bottom:0">Customers (<span id="cust-cnt">0</span>)</div>
-        <input type="text" id="cust-search" placeholder="🔍 Search customers..." oninput="renderAdmin()" style="width:240px;padding:7px 12px">
+      <div style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+          <div class="section-title" style="margin-bottom:0">Customers (<span id="cust-cnt">0</span> shown)</div>
+          <button class="btn btn-xs btn-secondary" onclick="clearCustFilters()">✕ Clear filters</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <input type="text" id="cust-search" placeholder="🔍 Search name..." oninput="renderAdmin()" style="width:180px;padding:7px 12px">
+          <select id="cf-day" onchange="renderAdmin()" style="padding:7px 10px">
+            <option value="">All Days</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+          <select id="cf-driver" onchange="renderAdmin()" style="padding:7px 10px">
+            <option value="">All Drivers</option>
+          </select>
+          <select id="cf-type" onchange="renderAdmin()" style="padding:7px 10px">
+            <option value="">All Types</option>
+            <option value="linen">🟣 Linen</option>
+            <option value="towel">⚫ Towel</option>
+            <option value="both">🟣⚫ Both</option>
+          </select>
+          <select id="cf-status" onchange="renderAdmin()" style="padding:7px 10px">
+            <option value="">Active + Inactive</option>
+            <option value="1">Active only</option>
+            <option value="0">Inactive only</option>
+          </select>
+        </div>
       </div>
       <div id="customers-list"></div>
     </div>
@@ -691,7 +719,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 
 <!-- EDIT ORDER MODAL (#1) -->
 <div class="modal-overlay" id="eo-modal">
-  <div class="modal modal-lg">
+  <div class="modal modal-lg" style="overflow-y:auto;max-height:90vh">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div><div class="modal-title" id="eo-title">Edit Order</div><div style="font-size:12px;color:var(--muted)" id="eo-sub"></div></div>
       <button class="btn btn-sm btn-secondary" onclick="closeEO()">✕</button>
@@ -953,8 +981,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       <div id="cc-stock-list"></div>
       <button class="btn btn-primary mt" onclick="saveCCstock()">Save Stock</button>
     </div>
-    <div class="cc-section" id="cc-products">
-      <div class="section-title">Products shown when receiving this customer</div>
+    <div class="cc-section" id="cc-products" style="overflow:auto">
       <div id="cc-prod-list"></div>
     </div>
     <div class="cc-section" id="cc-history">
@@ -1777,11 +1804,11 @@ function renderCCprods(){
   const totalProds = S.products.length;
   const assignedCount = S.products.filter(p=>assigned.has(p.id)).length;
   document.getElementById('cc-prod-list').innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+    <div style="position:sticky;top:0;z-index:10;background:#fff;padding:10px 0 10px 0;border-bottom:2px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <span style="font-size:12px;color:var(--muted);flex:1">${assignedCount} of ${totalProds} selected</span>
       <button class="btn btn-xs btn-secondary" onclick="selectAllProds()">✓ All</button>
       <button class="btn btn-xs btn-danger" onclick="unselectAllProds()">✕ None</button>
-      <button class="btn btn-xs btn-primary" onclick="saveAllProds()" style="background:#16a34a;border-color:#16a34a">💾 Save All</button>
+      <button class="btn btn-xs btn-primary" onclick="saveAllProds()" style="background:#16a34a;border-color:#16a34a;font-weight:700">💾 Save All</button>
     </div>
   `+S.categories.map(cat=>`
     <div style="margin-bottom:14px">
@@ -1863,9 +1890,58 @@ function showAdminTab(id,el){
   el.classList.add('active');document.getElementById('admin-'+id).classList.add('active');renderAdmin();
 }
 function renderAdmin(){
-  // Customers
-  document.getElementById('cust-cnt').textContent=S.customers.length;
-  document.getElementById('customers-list').innerHTML=S.customers.map(c=>{
+  // Populate driver filter
+  const cfDrv = document.getElementById('cf-driver');
+  if(cfDrv) {
+    const curDrv = cfDrv.value;
+    cfDrv.innerHTML = '<option value="">All Drivers</option>' +
+      S.drivers.map(d=>`<option value="${d.id}" ${d.id===curDrv?'selected':''}>${d.name}</option>`).join('');
+  }
+  // Apply filters
+  const search = (document.getElementById('cust-search')?.value||'').toLowerCase();
+  const cfDay  = document.getElementById('cf-day')?.value||'';
+  const cfDriver = document.getElementById('cf-driver')?.value||'';
+  const cfType = document.getElementById('cf-type')?.value||'';
+  const cfStatus = document.getElementById('cf-status')?.value;
+
+  let filtered = S.customers.filter(c => {
+    if(search && !c.name.toLowerCase().includes(search)) return false;
+    if(cfDay) {
+      // Check deliveryDays array OR dayDrivers
+      const days = c.deliveryDays?.length ? c.deliveryDays : [c.dueDay||4];
+      if(!days.includes(parseInt(cfDay))) return false;
+    }
+    if(cfDriver) {
+      // Check primary driver OR dayDrivers
+      const hasDrv = c.driverId === cfDriver ||
+        (c.dayDrivers?.some(dd => dd.driverId === cfDriver));
+      if(!hasDrv) return false;
+    }
+    if(cfType && c.custType !== cfType) return false;
+    if(cfStatus !== undefined && cfStatus !== '') {
+      if(String(c.active?'1':'0') !== cfStatus) return false;
+    }
+    return true;
+  });
+
+  // Sort: by day filter route order, else by name
+  if(cfDay && cfDriver) {
+    filtered.sort((a,b) => {
+      const getRO = c => {
+        if(c.dayDrivers?.length) {
+          const dd = c.dayDrivers.find(x=>x.driverId===cfDriver && x.day===parseInt(cfDay));
+          if(dd) return dd.routeOrder||99;
+        }
+        return c.routeOrder||99;
+      };
+      return getRO(a)-getRO(b);
+    });
+  } else {
+    filtered.sort((a,b)=>a.name.localeCompare(b.name));
+  }
+
+  document.getElementById('cust-cnt').textContent=filtered.length+' / '+S.customers.length;
+  document.getElementById('customers-list').innerHTML=filtered.map(c=>{
     const drv=S.drivers.find(d=>d.id===c.driverId);
     return`<div class="ali" onclick="openCC('${c.id}')">
       <div class="status-dot ${c.active?'dot-green':'dot-gray'}"></div>
@@ -3921,6 +3997,15 @@ async function saveAllProds() {
     btn.disabled = false;
     alert('Save failed: '+e.message);
   }
+}
+
+
+function clearCustFilters() {
+  ['cust-search','cf-day','cf-driver','cf-type','cf-status'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  renderAdmin();
 }
 
 async function ensureDeliveryDaysColumn() {
