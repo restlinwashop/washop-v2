@@ -1733,13 +1733,9 @@ function renderHistChart(entries){
 // CUSTOMER CARD MODAL
 // ═══════════════════════════════════════════════
 let ccId=null,ccHistChart=null;
-async function openCC(id){
+function openCC(id){
   ccId=id;const c=S.customers.find(x=>x.id===id);if(!c)return;
-  // Always reload fresh product assignments from DB when opening
-  try {
-    const fresh = await _get('cust_products', '?cust_id=eq.'+id+'&select=product_id');
-    custProds[id] = new Set(fresh.map(r => r.product_id));
-  } catch(e) { /* use cached */ }
+  // Products are loaded fresh when the Products tab is opened (see showCCtab)
   document.getElementById('cc-hdr-name').textContent=c.name;
   document.getElementById('cc-hdr-meta').textContent=c.frequency+' · '+c.address;
   document.getElementById('cc-name').value=c.name;
@@ -1768,10 +1764,20 @@ function showCCtab(id,el){
   document.querySelectorAll('.cc-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.cc-section').forEach(s=>s.classList.remove('active'));
   el.classList.add('active');document.getElementById('cc-'+id).classList.add('active');
-  if(id==='driver')renderCCdriver();
-  if(id==='stock')renderCCstock();
-  if(id==='products')renderCCprods();
-  if(id==='history')renderCChistory();
+  if(id==='driver') { renderCCdriver(); renderCCdayDrivers(); }
+  if(id==='stock') renderCCstock();
+  if(id==='products') {
+    // Always reload from DB before showing — guarantees fresh data
+    const listEl = document.getElementById('cc-prod-list');
+    if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Loading...</div>';
+    _get('cust_products','?cust_id=eq.'+ccId+'&select=product_id')
+      .then(fresh => {
+        custProds[ccId] = new Set(fresh.map(r=>r.product_id));
+        renderCCprods();
+      })
+      .catch(() => renderCCprods());
+  }
+  if(id==='history') renderCChistory();
 }
 function saveCCdetails(){
   const c=S.customers.find(x=>x.id===ccId);if(!c)return;
@@ -2290,19 +2296,19 @@ async function loadFromDB() {
   _toast('Connecting to database…', 4000);
   try {
     const [custs,drvs,cats,prods,cpRows,orders,ois,stock,rcvLog,rcvItems,hist,prices,pkgs] = await Promise.all([
-      _get('customers','?select=*&order=name'),
-      _get('drivers','?select=*&order=name'),
-      _get('categories','?select=*&order=name'),
-      _get('products','?select=*&order=name'),
-      _get('cust_products','?select=*'),
-      _get('orders','?select=*&order=delivery_date.desc,route_order.asc'),
-      _get('order_items','?select=*'),
-      _get('stock_entries','?select=*'),
-      _get('receiving_log','?select=*&order=received_on.desc,time.desc'),
-      _get('receiving_log_items','?select=*'),
-      _get('history','?select=*&order=date.desc'),
-      _get('cust_prices','?select=*'),
-      _get('packages','?select=*&order=name'),
+      _get('customers','?select=*&order=name&limit=10000'),
+      _get('drivers','?select=*&order=name&limit=1000'),
+      _get('categories','?select=*&order=name&limit=1000'),
+      _get('products','?select=*&order=name&limit=10000'),
+      _get('cust_products','?select=*&limit=10000'),
+      _get('orders','?select=*&order=delivery_date.desc,route_order.asc&limit=10000'),
+      _get('order_items','?select=*&limit=10000'),
+      _get('stock_entries','?select=*&limit=10000'),
+      _get('receiving_log','?select=*&order=received_on.desc,time.desc&limit=10000'),
+      _get('receiving_log_items','?select=*&limit=10000'),
+      _get('history','?select=*&order=date.desc&limit=10000'),
+      _get('cust_prices','?select=*&limit=10000'),
+      _get('packages','?select=*&order=name&limit=1000'),
     ]);
 
     S.customers = custs.map(c => ({
@@ -3651,7 +3657,7 @@ loadFromDB = async function() {
   await _origLoadFromDB();
   // Always load op_transfers
   try {
-    const transfers = await _get('op_transfers', '?select=*&order=date.desc,time_sent.desc');
+    const transfers = await _get('op_transfers', '?select=*&order=date.desc,time_sent.desc&limit=10000');
     S.opTransfers = transfers.map(t => ({
       id: t.id, date: t.date, productId: t.product_id, productName: t.product_name, qty: t.qty, time: t.time_sent||''
     }));
