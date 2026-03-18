@@ -1922,32 +1922,50 @@ function renderAdmin(){
   const cfType = document.getElementById('cf-type')?.value||'';
   const cfStatus = document.getElementById('cf-status')?.value;
 
+  const dayInt = cfDay ? parseInt(cfDay) : null;
+
   let filtered = S.customers.filter(c => {
     if(search && !c.name.toLowerCase().includes(search)) return false;
-    if(cfDay) {
-      // Check deliveryDays array OR dayDrivers
-      const days = c.deliveryDays?.length ? c.deliveryDays : [c.dueDay||4];
-      if(!days.includes(parseInt(cfDay))) return false;
-    }
-    if(cfDriver) {
-      // Check primary driver OR dayDrivers
-      const hasDrv = c.driverId === cfDriver ||
-        (c.dayDrivers?.some(dd => dd.driverId === cfDriver));
-      if(!hasDrv) return false;
-    }
     if(cfType && c.custType !== cfType) return false;
     if(cfStatus !== undefined && cfStatus !== '') {
       if(String(c.active?'1':'0') !== cfStatus) return false;
     }
+
+    // Day + Driver filtering — must use dayDrivers when available
+    if(dayInt && cfDriver) {
+      // Both selected: must have this exact day+driver combo
+      if(c.dayDrivers?.length) {
+        const match = c.dayDrivers.find(dd => dd.day === dayInt && dd.driverId === cfDriver);
+        if(!match) return false;
+      } else {
+        // Fallback: primary driver + deliveryDays
+        const days = c.deliveryDays?.length ? c.deliveryDays : [c.dueDay||4];
+        if(c.driverId !== cfDriver || !days.includes(dayInt)) return false;
+      }
+    } else if(dayInt) {
+      // Day only: check deliveryDays OR dayDrivers has this day
+      if(c.dayDrivers?.length) {
+        if(!c.dayDrivers.some(dd => dd.day === dayInt)) return false;
+      } else {
+        const days = c.deliveryDays?.length ? c.deliveryDays : [c.dueDay||4];
+        if(!days.includes(dayInt)) return false;
+      }
+    } else if(cfDriver) {
+      // Driver only: check primary OR any dayDrivers entry
+      const hasDrv = c.driverId === cfDriver ||
+        c.dayDrivers?.some(dd => dd.driverId === cfDriver);
+      if(!hasDrv) return false;
+    }
+
     return true;
   });
 
   // Sort: by day filter route order, else by name
-  if(cfDay && cfDriver) {
+  if(dayInt || cfDriver) {
     filtered.sort((a,b) => {
       const getRO = c => {
-        if(c.dayDrivers?.length) {
-          const dd = c.dayDrivers.find(x=>x.driverId===cfDriver && x.day===parseInt(cfDay));
+        if(c.dayDrivers?.length && dayInt && cfDriver) {
+          const dd = c.dayDrivers.find(x=>x.driverId===cfDriver && x.day===dayInt);
           if(dd) return dd.routeOrder||99;
         }
         return c.routeOrder||99;
