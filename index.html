@@ -1260,7 +1260,7 @@ function closeKP(){document.getElementById('kp-modal').classList.remove('open');
 // ═══════════════════════════════════════════════
 // RECEIVING
 // ═══════════════════════════════════════════════
-let recvCid=null,recvCatId=null,recvQtys={};
+let recvCid=null,recvCatId=null,recvQtys={},recvProdsCache=[];
 
 function filterCusts(q){
   const dd=document.getElementById('cust-dd');
@@ -1308,7 +1308,7 @@ async function selectRecvCust(id){
   document.getElementById('recv-driver').textContent=drv?drv.name:'Unassigned';
   document.getElementById('recv-panel').style.display='block';
   document.getElementById('recv-empty').style.display='none';
-  recvQtys={};recvCatId=null;
+  recvQtys={};recvCatId=null;recvProdsCache=[];
 
   // Always reload products fresh from DB
   try {
@@ -1331,13 +1331,15 @@ async function selectRecvCust(id){
     }
   }
 
+  // Store product list once — renderRecvProds will use this, not re-read cache
+  recvProdsCache = S.products.filter(p=>getCustProds(id).has(p.id));
+
   renderRecvProds();
 }
 function clearRecv(){recvCid=null;recvQtys={};recvCatId=null;document.getElementById('recv-search').value='';document.getElementById('cust-dd').style.display='none';document.getElementById('recv-sel-bar').style.display='none';document.getElementById('recv-panel').style.display='none';document.getElementById('recv-empty').style.display='block';}
 function renderRecvProds(){
-  const assigned=getCustProds(recvCid);
-  // Show ALL assigned products — no category tabs needed
-  const prods=S.products.filter(p=>assigned.has(p.id));
+  // Use the stable product list loaded when customer was selected
+  const prods = recvProdsCache.length ? recvProdsCache : S.products.filter(p=>getCustProds(recvCid).has(p.id));
   document.getElementById('recv-cats').innerHTML=''; // hide category tabs
   document.getElementById('recv-grid').innerHTML=prods.length
     ? prods.map(p=>`
