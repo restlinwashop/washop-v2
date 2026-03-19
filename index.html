@@ -484,26 +484,11 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
           <button class="btn btn-sm btn-secondary" onclick="clearRecv()">✕ Clear</button>
         </div>
         <div id="recv-panel" style="display:none">
-          <!-- PU Only toggle -->
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:#0369a1">
-              <input type="checkbox" id="recv-pu-only" onchange="togglePUOnly()" style="width:18px;height:18px;cursor:pointer;accent-color:#0284c7">
-              PU Only — pickup without delivery
-            </label>
-            <div id="recv-pu-bags" style="display:none;margin-left:auto;display:flex;align-items:center;gap:8px">
-              <span style="font-size:13px;color:#0369a1;font-weight:600">Bags:</span>
-              <button onclick="adjPUBags(-1)" style="width:32px;height:32px;border:1px solid #bae6fd;border-radius:6px;background:#fff;font-size:18px;cursor:pointer;touch-action:manipulation">−</button>
-              <span id="recv-pu-bag-count" style="font-size:18px;font-weight:700;min-width:28px;text-align:center;color:#0369a1">0</span>
-              <button onclick="adjPUBags(1)" style="width:32px;height:32px;border:1px solid #bae6fd;border-radius:6px;background:#fff;font-size:18px;cursor:pointer;touch-action:manipulation">+</button>
-            </div>
-          </div>
-          <div id="recv-products-section">
-            <div class="cat-tabs" id="recv-cats"></div>
-            <div class="product-grid" id="recv-grid"></div>
-          </div>
+          <div class="cat-tabs" id="recv-cats"></div>
+          <div class="product-grid" id="recv-grid"></div>
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
             <button class="btn btn-secondary" onclick="resetRecvQtys()">Reset</button>
-            <button class="btn btn-primary" id="recv-save-btn" onclick="saveReceiving()">💾 Save & Add to Orders</button>
+            <button class="btn btn-primary" onclick="saveReceiving()">💾 Save & Add to Orders</button>
           </div>
         </div>
         <div id="recv-empty" style="color:var(--muted);font-size:13px;padding:8px 0">Select a customer to begin</div>
@@ -1500,10 +1485,6 @@ function clearRecv(){
   document.getElementById('recv-sel-bar').style.display='none';
   document.getElementById('recv-panel').style.display='none';
   document.getElementById('recv-empty').style.display='block';
-  // Reset PU Only
-  const puCheck=document.getElementById('recv-pu-only');
-  if(puCheck){puCheck.checked=false;togglePUOnly();}
-  _puBags=0;
 }
 function renderRecvProds(){
   // Use the stable product list loaded when customer was selected
@@ -1542,52 +1523,12 @@ function renderRecvProds(){
 function recvCatSel(id){recvCatId=id;renderRecvProds();}
 function adjRecv(pid,d){recvQtys[pid]=Math.max(0,(recvQtys[pid]||0)+d);renderRecvProds();}
 function resetRecvQtys(){recvQtys={};renderRecvProds();}
-let _puBags=0;
-
-function togglePUOnly(){
-  const isPU=document.getElementById('recv-pu-only').checked;
-  document.getElementById('recv-products-section').style.display=isPU?'none':'block';
-  document.getElementById('recv-pu-bags').style.display=isPU?'flex':'none';
-  const btn=document.getElementById('recv-save-btn');
-  if(btn) btn.textContent=isPU?'📦 Save PU Only':'💾 Save & Add to Orders';
-  if(!isPU){_puBags=0;document.getElementById('recv-pu-bag-count').textContent='0';}
-}
-
-function adjPUBags(d){
-  _puBags=Math.max(0,_puBags+d);
-  document.getElementById('recv-pu-bag-count').textContent=_puBags;
-}
-
 function saveReceiving(){
   const c=S.customers.find(x=>x.id===recvCid);if(!c)return alert('Select a customer.');
-  const isPU=document.getElementById('recv-pu-only')?.checked;
-  const delivDate=document.getElementById('recv-date').value;
-
-  if(isPU){
-    // PU Only — create order with no items, note = PU Only
-    const ex=S.orders.find(o=>o.customerId===c.id&&o.deliveryDate===delivDate&&o.status==='pending'&&o.isPUOnly);
-    if(!ex){
-      const oid=uid();
-      const o={id:oid,customerId:c.id,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,
-        items:[],deliveryDate:delivDate,bagCount:_puBags||1,status:'pending',note:'PU Only',isManual:false,isPUOnly:true};
-      S.orders.push(o);
-      addActivity(`PU Only: ${c.name} — ${_puBags} bags`);
-    }
-    // Log in receiving log with empty items but bag count note
-    S.receivingLog.push({id:uid(),customerId:c.id,customerName:c.name,
-      items:[{productId:'pu',productName:'PU Only',catId:'',qty:_puBags||0}],
-      deliveryDate:delivDate,receivedOn:todayStr(),time:timeStr()});
-    renderRecvLog();updateProdSummary();updateOrderBadge();
-    document.getElementById('recv-pu-only').checked=false;
-    togglePUOnly();
-    clearRecv();
-    return;
-  }
-
   const items=S.products.filter(p=>(recvQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:recvQtys[p.id]}));
   if(!items.length)return alert('Enter at least one quantity.');
-  // MERGE if same customer+date+pending order exists
-  const ex=S.orders.find(o=>o.customerId===c.id&&o.deliveryDate===delivDate&&o.status==='pending'&&!o.isPUOnly);
+  const delivDate=document.getElementById('recv-date').value;
+  const ex=S.orders.find(o=>o.customerId===c.id&&o.deliveryDate===delivDate&&o.status==='pending');
   if(ex){
     items.forEach(ni=>{const oi=ex.items.find(x=>x.productId===ni.productId);if(oi)oi.qty+=ni.qty;else ex.items.push({...ni});});
     addActivity(`Merged ${items.reduce((a,b)=>a+b.qty,0)} items → ${c.name}`);
@@ -1819,7 +1760,7 @@ function renderOrders(){
               <span class="order-row-cust">${o.customerName}</span>
               <span class="order-row-meta">${c.frequency||''}</span>
               <span class="badge ${o.status==='pending'?'bg-warn':o.status==='packed'?'bg-green':'bg-gray'}" style="margin-left:10px">${o.status.toUpperCase()}</span>
-              ${o.note==='PU Only'?`<span style="font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;margin-left:8px">📦 PU ONLY</span>`:o.note?`<span style="font-size:11px;color:var(--muted);margin-left:8px">📝 ${o.note}</span>`:''}
+              ${o.note?`<span style="font-size:11px;color:var(--muted);margin-left:8px">📝 ${o.note}</span>`:''}
               <span style="margin-left:10px;font-size:12px;color:var(--muted)">▾</span>
             </div>
             <div class="order-row-items" id="oe-${o.id}-${g.type}">
@@ -3152,32 +3093,12 @@ async function loadFromDB() {
 const _origSaveReceiving = saveReceiving;
 saveReceiving = async function() {
   const c = S.customers.find(x => x.id === recvCid); if (!c) return alert('Select a customer.');
-  const isPU = document.getElementById('recv-pu-only')?.checked;
-  const delivDate = document.getElementById('recv-date').value;
-  _toast('Saving…', 3000);
-
-  if(isPU){
-    // PU Only — order with no items
-    try {
-      const oid = uid();
-      const _od = getOrderDriver(c.id, delivDate);
-      await _post('orders',[{id:oid,customer_id:c.id,customer_name:c.name,driver_id:_od.driverId,
-        route_order:_od.routeOrder||99,delivery_date:delivDate,bag_count:_puBags||1,
-        status:'pending',note:'PU Only',is_manual:false,checked_items:{}}]);
-      // Log in receiving log
-      const lid=uid();
-      await _post('receiving_log',[{id:lid,customer_id:c.id,customer_name:c.name,delivery_date:delivDate,received_on:todayStr(),time:timeStr()}]);
-      await _post('receiving_log_items',[{id:uid(),log_id:lid,product_id:'pu-only',product_name:'PU Only',cat_id:'',qty:_puBags||0}]);
-      _origSaveReceiving();
-      _toast('✓ PU Only saved', 2000);
-    } catch(e){ _toast('⚠ Save error: '+e.message.slice(0,60), 5000); }
-    return;
-  }
-
   const items = S.products.filter(p => (recvQtys[p.id]||0) > 0).map(p => ({productId:p.id,productName:p.name,catId:p.catId,qty:recvQtys[p.id]}));
   if (!items.length) return alert('Enter at least one quantity.');
+  const delivDate = document.getElementById('recv-date').value;
+  _toast('Saving…', 3000);
   try {
-    const ex = S.orders.find(o => o.customerId===c.id && o.deliveryDate===delivDate && o.status==='pending' && !o.isPUOnly);
+    const ex = S.orders.find(o => o.customerId===c.id && o.deliveryDate===delivDate && o.status==='pending');
     if (ex) {
       for (const ni of items) {
         const oi = ex.items.find(x => x.productId===ni.productId);
