@@ -862,7 +862,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
         <div style="font-size:12px;color:var(--muted)">Track production output. Enter quantities sent to Factory 2.</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:0">Preparing for:</label>
+        <label style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:0">Today (F1 working date):</label>
         <input type="date" id="op-date" onchange="renderOperation()" style="width:160px">
         <button class="btn btn-sm btn-secondary" onclick="renderOperation()">↻ Refresh</button>
       </div>
@@ -871,8 +871,8 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     <!-- Summary bar: what's needed today -->
     <div class="card" style="margin-bottom:18px">
       <div class="card-header">
-        <div class="card-title">Required for <span id="op-date-label" style="color:var(--accent2)">—</span></div>
-        <span style="font-size:11px;color:var(--muted);margin-left:auto">From Order / Pack page</span>
+        <div class="card-title">Required — <span id="op-date-label" style="color:var(--accent2)">—</span> pending orders</div>
+        <span style="font-size:11px;color:var(--muted);margin-left:auto">Tomorrow + day after · pending only</span>
       </div>
       <div class="card-body" id="op-required-grid" style="display:flex;flex-wrap:wrap;gap:10px">
         <div style="font-size:13px;color:var(--muted)">Select a date above</div>
@@ -1485,23 +1485,27 @@ function renderRecvLog(){
   document.getElementById('recv-log-cnt').textContent=entries.length+' entries';
 }
 function updateProdSummary(){
-  const tot={},rem={},prodInfo={};
-  S.orders.forEach(o=>o.items.forEach(it=>{
-    tot[it.productName]=(tot[it.productName]||0)+it.qty;
-    if(o.status==='pending')rem[it.productName]=(rem[it.productName]||0)+it.qty;
-    if(!prodInfo[it.productName])prodInfo[it.productName]=prodType(it.productId);
-  }));
-  const keys=Object.keys(tot);const g=document.getElementById('prod-grid');
-  if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">Receive items to see targets</div>';return;}
+  // Show today's RECEIVED items (from receiving log) — not orders
+  const today=todayStr();
+  const tot={},prodInfo={};
+  S.receivingLog.forEach(log=>{
+    if(log.receivedOn!==today)return;
+    (log.items||[]).forEach(it=>{
+      tot[it.productName]=(tot[it.productName]||0)+it.qty;
+      if(!prodInfo[it.productName])prodInfo[it.productName]=prodType(it.productId);
+    });
+  });
+  const keys=Object.keys(tot);
+  const g=document.getElementById('prod-grid');
+  if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">No items received today yet</div>';return;}
   g.innerHTML=keys.map(k=>{
-    const r=rem[k]||0;
     const type=prodInfo[k]||'linen';
     const borderColor=type==='towel'?'#3b82f6':'#16a34a';
-    const bgColor=r===0?(type==='towel'?'#eff6ff':'#f0fdf4'):'#fff';
-    return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor};${r===0?'opacity:0.7':''}">
+    const bgColor=type==='towel'?'#eff6ff':'#f0fdf4';
+    return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor}">
       <div class="ps-label">${k}</div>
-      <div class="ps-val" style="color:${borderColor}">${r}</div>
-      <div class="ps-sub">of ${tot[k]} · ${tot[k]-r} done</div>
+      <div class="ps-val" style="color:${borderColor}">${tot[k]}</div>
+      <div class="ps-sub">received today</div>
     </div>`;
   }).join('');
 }
@@ -3841,14 +3845,22 @@ function initOperation() {
 }
 
 function renderOperation() {
-  const date = document.getElementById('op-date')?.value || addDays(todayStr(),1);
-  document.getElementById('op-date-label').textContent = fmtFull(date);
+  const date = document.getElementById('op-date')?.value || todayStr();
+  const tomorrow = addDays(date, 1);
+  const dayAfter  = addDays(date, 2);
+  document.getElementById('op-date-label').textContent = fmtD(tomorrow) + ' + ' + fmtD(dayAfter);
   opQtys = {};
 
-  // ── Required: sum all order items for this date ──
-  const dayOrders = S.orders.filter(o => o.deliveryDate === date);
-  const required = {}; // productName -> {qty, productId}
-  dayOrders.forEach(o => {
+  // ── Required: pending orders for TOMORROW and DAY AFTER from selected date ──
+  // F1 works today to prepare tomorrow's + day-after's orders
+  const tomorrow = addDays(date, 1);
+  const dayAfter  = addDays(date, 2);
+  const targetOrders = S.orders.filter(o =>
+    (o.deliveryDate === tomorrow || o.deliveryDate === dayAfter) && o.status === 'pending'
+  );
+
+  const required = {};
+  targetOrders.forEach(o => {
     o.items.forEach(it => {
       if(!required[it.productId]) required[it.productId] = {name: it.productName, qty: 0, catId: it.catId};
       required[it.productId].qty += it.qty;
