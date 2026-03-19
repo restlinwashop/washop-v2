@@ -1632,11 +1632,31 @@ function toggleChip(oid,pid,type,el){
 }
 
 function renderOrderProdSummary(orders){
-  const tot={},rem={};
-  orders.forEach(o=>o.items.forEach(it=>{tot[it.productName]=(tot[it.productName]||0)+it.qty;if(o.status==='pending')rem[it.productName]=(rem[it.productName]||0)+it.qty;}));
-  const keys=Object.keys(tot);const g=document.getElementById('order-prod-grid');
+  const tot={};
+  // Count total quantities for the day
+  orders.forEach(o=>o.items.forEach(it=>{
+    tot[it.productName]=(tot[it.productName]||0)+it.qty;
+  }));
+  // Count checked (done) quantities — chip ticked = done
+  const done={};
+  orders.forEach(o=>{
+    if(!o.checkedItems)return;
+    o.items.forEach(it=>{
+      // check both linen and towel type keys
+      const ckL=o.checkedItems[it.productId+'linen'];
+      const ckT=o.checkedItems[it.productId+'towel'];
+      const ckB=o.checkedItems[it.productId+'both'];
+      if(ckL||ckT||ckB) done[it.productName]=(done[it.productName]||0)+it.qty;
+    });
+  });
+  const keys=Object.keys(tot);
+  const g=document.getElementById('order-prod-grid');
   if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">No orders for this day</div>';return;}
-  g.innerHTML=keys.map(k=>`<div class="ps-item ${(rem[k]||0)===0?'done':''}"><div class="ps-label">${k}</div><div class="ps-val">${rem[k]||0}</div><div class="ps-sub">of ${tot[k]} · ${tot[k]-(rem[k]||0)} packed</div></div>`).join('');
+  g.innerHTML=keys.map(k=>{
+    const d=done[k]||0;
+    const rem=Math.max(0,tot[k]-d);
+    return`<div class="ps-item ${rem===0?'done':''}"><div class="ps-label">${k}</div><div class="ps-val" id="psum-${k.replace(/\s+/g,'_')}">${rem}</div><div class="ps-sub">of ${tot[k]} · ${d} done</div></div>`;
+  }).join('');
 }
 
 function markPacked(id){
@@ -3055,11 +3075,15 @@ printLabels = async function(orderId) {
   _origPrintLabels(orderId);
 };
 
-// checkedItems DB sync (debounced)
+// checkedItems DB sync (debounced) + live summary update
 const _origToggleChip = toggleChip;
 const _chipTimer = {};
 toggleChip = function(oid, pid, type, el) {
   _origToggleChip(oid, pid, type, el);
+  // Update summary live without full re-render
+  const dayOrders = S.orders.filter(o=>o.deliveryDate===selDay);
+  renderOrderProdSummary(dayOrders);
+  // DB sync debounced
   clearTimeout(_chipTimer[oid]);
   _chipTimer[oid] = setTimeout(() => {
     const o = S.orders.find(x=>x.id===oid); if (!o) return;
