@@ -312,6 +312,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     <div class="nav-section">Operations</div>
     <div class="nav-item active" onclick="showPage('dashboard')"><span class="nav-icon">📊</span>Dashboard</div>
     <div class="nav-item" onclick="showPage('operation')"><span class="nav-icon">🏭</span>Operation</div>
+    <div class="nav-item" onclick="showPage('rejects')"><span class="nav-icon">🗑</span>Rejects</div>
     <div class="nav-item" onclick="showPage('receiving')"><span class="nav-icon">📦</span>Receiving</div>
     <div class="nav-item" onclick="showPage('order')">
       <span class="nav-icon">🗂️</span>Order / Pack
@@ -395,7 +396,49 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     </div>
   </div>
 
-  <!-- ════ RECEIVING ════ -->
+  
+  <!-- ════ REJECTS / DAMAGE ════ -->
+  <div class="page" id="page-rejects">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-title">🗑 Damaged / Rejected Items</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
+          <input type="date" id="rej-date" style="padding:6px 10px;font-size:13px">
+          <button class="btn btn-secondary btn-sm" onclick="exportRejectsCSV()">⬇ Export</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+          Enter damaged/rejected quantities per product. These will be deducted from stock.
+        </div>
+        <div id="rej-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <select id="rej-add-prod" style="flex:1;min-width:180px;padding:8px 10px">
+            <option value="">＋ Add product to track...</option>
+          </select>
+          <button class="btn btn-primary" onclick="addRejProduct()">Add</button>
+          <button class="btn btn-secondary" onclick="saveRejects()" style="margin-left:auto">💾 Save Daily Record</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">📊 Reject History</div>
+        <div style="display:flex;gap:8px;margin-left:auto">
+          <select id="rej-period" onchange="renderRejectHistory()" style="padding:6px 10px;font-size:13px">
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+        </div>
+      </div>
+      <div class="card-body" id="rej-history">
+        <div class="empty">No reject records yet</div>
+      </div>
+    </div>
+  </div>
+
+<!-- ════ RECEIVING ════ -->
   <div class="page" id="page-receiving">
     <div class="prod-bar">
       <div class="prod-bar-hdr"><div class="prod-bar-title">📋 Today's Production Target</div><span id="prod-date" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)"></span></div>
@@ -920,6 +963,24 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     </div>
   </div>
 
+
+  <!-- QUICK ADD PRODUCT MODAL (Receiving) -->
+  <div class="modal-overlay" id="qap-modal">
+    <div class="modal" style="width:380px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700">Quick Add Product</div>
+        <button class="btn btn-sm btn-secondary" onclick="document.getElementById('qap-modal').classList.remove('open')">✕</button>
+      </div>
+      <div class="field"><label>Product Name</label><input id="qap-name" placeholder="e.g. Chef Jacket - White"></div>
+      <div class="field"><label>Category</label><select id="qap-cat"><option value="">Select...</option></select></div>
+      <div class="field"><label>Note (optional)</label><input id="qap-note" placeholder="e.g. Own goods — Cafe Rosella aprons"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-secondary" onclick="document.getElementById('qap-modal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-primary" onclick="quickAddProduct()">Add & Assign</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <!-- ════ KEYPAD MODAL ════ -->
@@ -971,6 +1032,16 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
             <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="6" class="cc-day-cb" style="width:auto"> Sat</label>
           </div></div>
         <div class="field"><label>Notes</label><textarea id="cc-notes" rows="2"></textarea></div>
+        <div class="field">
+          <label>Next Delivery Override</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="date" id="cc-next-override" style="flex:1">
+            <button class="btn btn-xs btn-danger" onclick="clearDeliveryOverride()" title="Clear override">✕ Clear</button>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">
+            Set to force next delivery date (e.g. after public holiday or skip week). Auto-clears after next receiving.
+          </div>
+        </div>
         <div class="field"><label>Status</label><select id="cc-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
         <div class="field"><label>Customer Type</label>
           <select id="cc-ctype" onchange="if(this.value && ccId){autoAssignBags(ccId, this.value).then(()=>renderCCprods());}">
@@ -1087,6 +1158,10 @@ const FREQ_DAYS={Weekly:7,Fortnightly:14,Monthly:30,'3x Week':2,'2x Week':3,Dail
 // Calculate next delivery date based on customer's actual delivery days
 // NOT based on today + interval — based on customer's scheduled day(s)
 function nextDeliveryDate(cust, fromDate) {
+  // Manual override — if set, use it directly (then clear it after use)
+  if(cust.nextDeliveryOverride) {
+    return cust.nextDeliveryOverride;
+  }
   fromDate = fromDate || todayStr();
   const from = new Date(fromDate + 'T00:00:00');
   
@@ -1143,7 +1218,7 @@ function prodType(prodId){const p=S.products.find(x=>x.id===prodId);return p?cat
 // ═══════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════
-const PAGE_TITLES={bulk:'Bulk Customer Editor',operation:'Operation — Factory 1',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
+const PAGE_TITLES={bulk:'Bulk Customer Editor',operation:'Operation — Factory 1',rejects:'Rejects & Damage',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1155,6 +1230,7 @@ function showPage(id){
   if(id==='driver')initDriverApp();
   if(id==='history')initHistory();
   if(id==='stock')renderStockTable();
+  if(id==='rejects')initRejectsPage();
   if(id==='dashboard')renderDashboard();
   if(id==='admin')renderAdmin();
   if(id==='pricing')renderPricing();
@@ -1257,6 +1333,15 @@ function renderRecvProds(){
       </div>
     </div>`).join('')
     : '<div style="color:var(--muted);font-size:13px">No products assigned. Open customer card → Products tab.</div>';
+
+  // Add quick-add button below the grid
+  const gridEl = document.getElementById('recv-grid');
+  if(gridEl) {
+    const btn = document.createElement('div');
+    btn.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)';
+    btn.innerHTML = '<button class="btn btn-secondary btn-sm" onclick="openQuickAddProd()">＋ Add product (own goods / special)</button>';
+    gridEl.after(btn);
+  }
 }
 function recvCatSel(id){recvCatId=id;renderRecvProds();}
 function adjRecv(pid,d){recvQtys[pid]=Math.max(0,(recvQtys[pid]||0)+d);renderRecvProds();}
@@ -1798,6 +1883,8 @@ function openCC(id){
   document.getElementById('cc-active').value=c.active?'1':'0';
   const ctEl = document.getElementById('cc-ctype');
   if(ctEl) ctEl.value = c.custType||'';
+  const ovEl = document.getElementById('cc-next-override');
+  if(ovEl) ovEl.value = c.nextDeliveryOverride||'';
   // Reset tabs
   document.querySelectorAll('.cc-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.cc-section').forEach(s=>s.classList.remove('active'));
@@ -2360,6 +2447,7 @@ async function loadFromDB() {
     S.customers = custs.map(c => ({
       id:c.id, name:c.name, address:c.address||'', frequency:c.frequency||'Weekly',
       dueDay:c.due_day||4,
+      nextDeliveryOverride: c.next_delivery_override||null,
       custType: c.cust_type||null,
       deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4],
       dayDrivers: c.day_drivers ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : null,
@@ -2451,6 +2539,11 @@ saveReceiving = async function() {
     await _post('history', items.map(it => ({id:uid(),date:todayStr(),customer_id:c.id,product_id:it.productId,qty:it.qty,type:'receive'})));
     _origSaveReceiving();
     _toast('✓ Saved', 2000);
+    // Clear delivery date override after successful receiving
+    if(c.nextDeliveryOverride) {
+      c.nextDeliveryOverride = null;
+      _patch('customers',{next_delivery_override:null},'?id=eq.'+c.id).catch(()=>{});
+    }
   } catch(e) { _toast('⚠ Save error: ' + e.message.slice(0,60), 5000); }
 };
 
@@ -2626,9 +2719,11 @@ saveCCdetails = async function() {
   const c = S.customers.find(x=>x.id===ccId); if (!c) return;
   const ccDays=[...document.querySelectorAll('.cc-day-cb:checked')].map(x=>parseInt(x.value));
   const newCustType = document.getElementById('cc-ctype')?.value || null;
-  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:ccDays[0]||4,deliveryDays:ccDays.length?ccDays:[4],email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,active:parseInt(document.getElementById('cc-active').value)===1,custType:newCustType};
-  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,delivery_days:JSON.stringify(upd.deliveryDays),email:upd.email,phone:upd.phone,notes:upd.notes,active:upd.active?1:0,cust_type:upd.custType||null},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
-  Object.assign(c, upd);   if(upd.custType) { await autoAssignBags(ccId); if(document.getElementById("cc-products").classList.contains("active")) renderCCprods(); }
+  const newOverride = document.getElementById('cc-next-override')?.value || null;
+  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:ccDays[0]||4,deliveryDays:ccDays.length?ccDays:[4],email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,active:parseInt(document.getElementById('cc-active').value)===1,custType:newCustType,nextDeliveryOverride:newOverride};
+  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,delivery_days:JSON.stringify(upd.deliveryDays),email:upd.email,phone:upd.phone,notes:upd.notes,active:upd.active?1:0,cust_type:upd.custType||null,next_delivery_override:upd.nextDeliveryOverride||null},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
+  Object.assign(c, upd);
+  if(upd.nextDeliveryOverride !== undefined) c.nextDeliveryOverride = upd.nextDeliveryOverride;   if(upd.custType) { await autoAssignBags(ccId); if(document.getElementById("cc-products").classList.contains("active")) renderCCprods(); }
   renderAdmin(); _toast('✓ Saved', 2000);
   document.getElementById('cc-hdr-name').textContent=c.name; document.getElementById('cc-hdr-meta').textContent=c.frequency+' · '+c.address;
 };
@@ -4329,6 +4424,215 @@ function toggleSidebar() {
     }, 3000);
   }
 })();
+
+
+// ═══════════════════════════════════════
+// REJECTS / DAMAGE TRACKING
+// ═══════════════════════════════════════
+let rejQtys = {}; // productId -> qty
+let rejTracked = []; // product IDs being tracked today
+
+function initRejectsPage() {
+  // Set date to today
+  const dEl = document.getElementById('rej-date');
+  if(dEl && !dEl.value) dEl.value = todayStr();
+  // Populate product dropdown
+  const sel = document.getElementById('rej-add-prod');
+  if(sel) {
+    sel.innerHTML = '<option value="">＋ Add product to track...</option>' +
+      S.products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  }
+  renderRejectGrid();
+  renderRejectHistory();
+}
+
+function addRejProduct() {
+  const sel = document.getElementById('rej-add-prod');
+  const pid = sel?.value;
+  if(!pid) return;
+  if(!rejTracked.includes(pid)) {
+    rejTracked.push(pid);
+    if(!rejQtys[pid]) rejQtys[pid] = 0;
+  }
+  sel.value = '';
+  renderRejectGrid();
+}
+
+function renderRejectGrid() {
+  const grid = document.getElementById('rej-grid');
+  if(!grid) return;
+  if(!rejTracked.length) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px;grid-column:1/-1">Add products above to start tracking damage.</div>';
+    return;
+  }
+  grid.innerHTML = rejTracked.map(pid => {
+    const p = S.products.find(x=>x.id===pid);
+    if(!p) return '';
+    const qty = rejQtys[pid] || 0;
+    return `<div style="background:#fff;border:2px solid ${qty>0?'#fca5a5':'var(--border)'};border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text)">${p.name}</div>
+      <div onclick="openKP('${p.name} damaged','How many damaged?',(v)=>{rejQtys['${pid}']=v;renderRejectGrid();},${qty})"
+        style="font-family:'DM Mono',monospace;font-size:38px;font-weight:600;
+               color:${qty>0?'#dc2626':'#9ca3af'};cursor:pointer;padding:8px 0;
+               background:${qty>0?'#fef2f2':'#f9fafb'};border-radius:8px;
+               border:2px dashed ${qty>0?'#fca5a5':'#e5e7eb'}">
+        ${qty}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">TAP TO ENTER</div>
+      <button class="btn btn-xs btn-danger" onclick="rejTracked=rejTracked.filter(x=>x!=='${pid}');renderRejectGrid();" style="margin-top:8px">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+async function saveRejects() {
+  const date = document.getElementById('rej-date')?.value || todayStr();
+  const entries = rejTracked.filter(pid => (rejQtys[pid]||0) > 0);
+  if(!entries.length) { _toast('No quantities entered', 2000); return; }
+
+  // Save to history as type 'reject'
+  const rows = entries.map(pid => ({
+    id: uid(), date, customer_id: null, product_id: pid,
+    qty: rejQtys[pid], type: 'reject'
+  }));
+
+  try {
+    await _post('history', rows);
+    // Deduct from stock entries
+    for(const pid of entries) {
+      const qty = rejQtys[pid];
+      const se = S.stockEntries.find(s => s.productId===pid && !s.customerId);
+      if(se) {
+        se.currentStock = Math.max(0, (se.currentStock||0) - qty);
+        await _patch('stock_entries', {current_stock: se.currentStock},
+          '?product_id=eq.'+pid).catch(()=>{});
+      }
+    }
+    _toast('✓ Reject record saved — '+entries.length+' products', 2500);
+    // Reset
+    rejQtys = {};
+    rejTracked.forEach(pid => rejQtys[pid] = 0);
+    renderRejectGrid();
+    renderRejectHistory();
+  } catch(e) {
+    alert('Save failed: '+e.message);
+  }
+}
+
+function renderRejectHistory() {
+  const el = document.getElementById('rej-history');
+  if(!el) return;
+  const days = parseInt(document.getElementById('rej-period')?.value||'7');
+  const cutoff = addDays(todayStr(), -days);
+  const entries = (S.history||[]).filter(h => h.type==='reject' && h.date >= cutoff);
+  if(!entries.length) { el.innerHTML='<div class="empty">No reject records</div>'; return; }
+
+  // Group by date
+  const byDate = {};
+  entries.forEach(h => {
+    if(!byDate[h.date]) byDate[h.date] = [];
+    byDate[h.date].push(h);
+  });
+
+  // Also totals by product
+  const byProd = {};
+  entries.forEach(h => {
+    const p = S.products.find(x=>x.id===h.productId);
+    const name = p?.name||h.productId;
+    if(!byProd[name]) byProd[name] = 0;
+    byProd[name] += h.qty;
+  });
+
+  el.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Totals (last ${days} days)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        ${Object.entries(byProd).sort((a,b)=>b[1]-a[1]).map(([name,qty])=>`
+          <div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:8px 14px;text-align:center">
+            <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:#dc2626">${qty}</div>
+            <div style="font-size:11px;color:#7f1d1d">${name}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <table style="width:100%"><thead><tr><th>Date</th><th>Product</th><th>Qty</th></tr></thead>
+    <tbody>
+      ${Object.keys(byDate).sort().reverse().map(date =>
+        byDate[date].map((h,i) => {
+          const p = S.products.find(x=>x.id===h.productId);
+          return `<tr>
+            ${i===0?`<td rowspan="${byDate[date].length}" style="font-weight:600;vertical-align:top;padding-top:10px">${fmtD(date)}</td>`:''}
+            <td>${p?.name||'?'}</td>
+            <td><span class="badge" style="background:#fee2e2;color:#dc2626">${h.qty}</span></td>
+          </tr>`;
+        }).join('')
+      ).join('')}
+    </tbody></table>`;
+}
+
+function exportRejectsCSV() {
+  const days = parseInt(document.getElementById('rej-period')?.value||'30');
+  const cutoff = addDays(todayStr(), -days);
+  const entries = (S.history||[]).filter(h => h.type==='reject' && h.date >= cutoff)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  if(!entries.length) { _toast('No data', 2000); return; }
+  const rows = [['Date','Product','Qty'],...entries.map(h=>{
+    const p=S.products.find(x=>x.id===h.productId);
+    return[h.date,p?.name||'?',h.qty];
+  })];
+  const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'rejects-'+todayStr()+'.csv';
+  a.click();
+}
+
+
+// ═══════════════════════════════════════
+// QUICK ADD PRODUCT (Receiving)
+// ═══════════════════════════════════════
+function openQuickAddProd() {
+  const sel = document.getElementById('qap-cat');
+  if(sel) sel.innerHTML = '<option value="">Select...</option>' +
+    S.categories.map(c=>`<option value="${c.id}">${c.name} (${c.type})</option>`).join('');
+  document.getElementById('qap-name').value = '';
+  document.getElementById('qap-note').value = '';
+  document.getElementById('qap-modal').classList.add('open');
+}
+
+async function quickAddProduct() {
+  const name = document.getElementById('qap-name').value.trim();
+  const catId = document.getElementById('qap-cat').value;
+  const note  = document.getElementById('qap-note').value.trim();
+  if(!name || !catId) { _toast('Name and category required', 2000); return; }
+
+  const id = uid();
+  const prod = {id, name, catId, trackStock: true, note};
+
+  try {
+    // Save product to DB
+    await _post('products', [{id, name, cat_id: catId, track_stock: true}]);
+    S.products.push(prod);
+
+    // Assign to current customer
+    if(recvCid) {
+      const s = getCustProds(recvCid);
+      s.add(id);
+      await _post('cust_products', [{cust_id: recvCid, product_id: id}]).catch(()=>{});
+    }
+
+    document.getElementById('qap-modal').classList.remove('open');
+    renderRecvProds();
+    _toast('✓ "'+name+'" added' + (note?' — '+note:''), 3000);
+  } catch(e) {
+    alert('Error: '+e.message);
+  }
+}
+
+
+function clearDeliveryOverride() {
+  const el = document.getElementById('cc-next-override');
+  if(el) el.value = '';
+  _toast('Override cleared — will use next from schedule', 2000);
+}
 
 async function ensureDeliveryDaysColumn() {
   // Try to add the column if it doesn't exist - will fail silently if already exists
