@@ -3852,9 +3852,6 @@ function renderOperation() {
   opQtys = {};
 
   // ── Required: pending orders for TOMORROW and DAY AFTER from selected date ──
-  // F1 works today to prepare tomorrow's + day-after's orders
-  const tomorrow = addDays(date, 1);
-  const dayAfter  = addDays(date, 2);
   const targetOrders = S.orders.filter(o =>
     (o.deliveryDate === tomorrow || o.deliveryDate === dayAfter) && o.status === 'pending'
   );
