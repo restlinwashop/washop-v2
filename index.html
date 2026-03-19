@@ -1559,7 +1559,7 @@ function printLabels(id){
   const drv=S.drivers.find(d=>d.id===o.driverId);
   w.document.write(`<html><body style="font-family:monospace;padding:20px"><h3>${o.customerName}</h3><p>Delivery: ${o.deliveryDate} · Driver: ${drv?.name||'—'} · <b>${o.bagCount} bags</b></p>
     ${Array.from({length:o.bagCount},(_,i)=>`<div style="border:2px solid #000;padding:14px;margin:10px 0;border-radius:4px"><div style="font-size:22px;font-weight:bold">${o.customerName}</div><div>Delivery: ${o.deliveryDate}</div><div style="font-size:12px;margin-top:6px">${o.items.map(x=>x.productName+': '+x.qty).join(' | ')}</div><div style="font-size:13px;margin-top:4px">Bag ${i+1} of ${o.bagCount}</div></div>`).join('')}
-    <script>window.print();<\/script></body></html>`);
+    <\/script>window.print();<\/script></body></html>`);
 }
 
 // Manual order modal
@@ -1697,13 +1697,7 @@ function printDriverSheet(){
   w.document.write(`<html><body style="font-family:sans-serif;padding:20px"><h2>Driver Sheet — ${fmtFull(todayStr())}</h2>
     <table border="1" cellpadding="8" style="width:100%;border-collapse:collapse"><thead><tr><th>Driver</th><th>Customer</th><th>Items</th><th>Bags</th></tr></thead>
     <tbody>${packed.map(o=>{const d=S.drivers.find(x=>x.id===o.driverId);return`<tr><td>${d?.name||'—'}</td><td><b>${o.customerName}</b></td><td>${o.items.map(i=>i.productName+' ('+i.qty+')').join(', ')}</td><td>${o.bagCount}</td></tr>`;}).join('')}</tbody></table>
-    <script>window.onerror = function(msg, src, line, col, err) {
-  const d = document.createElement('div');
-  d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#dc2626;color:#fff;padding:12px 16px;font-size:12px;z-index:99999;font-family:monospace;word-break:break-all';
-  d.textContent = '🚨 JS Error line ' + line + ': ' + msg;
-  document.body.appendChild(d);
-};
-window.print();<\/script></body></html>`);
+    <\/script>window.print();<\/script></body></html>`);
 }
 
 // ═══════════════════════════════════════════════
@@ -1962,9 +1956,9 @@ function renderCCstock(){
     rows += '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
       + '<td style="padding:10px 8px;font-weight:600;font-size:13px">'+p.name+'</td>'
       + '<td style="text-align:center;padding:8px"><input class="inp-sm" type="number" id="ccob-'+p.id+'" value="'+ob+'" min="0" style="width:70px;text-align:center"></td>'
-      + '<td style="text-align:center;padding:8px;font-family:'DM Mono',monospace;color:#16a34a;font-weight:700">'+recv+'</td>'
-      + '<td style="text-align:center;padding:8px;font-family:'DM Mono',monospace;color:#dc2626;font-weight:700">'+disp+'</td>'
-      + '<td style="text-align:center;padding:8px"><span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:800;color:'+col+'">'+atCust+'</span></td>'
+      + '<td style="text-align:center;padding:8px;font-family:monospace,monospace;color:#16a34a;font-weight:700">'+recv+'</td>'
+      + '<td style="text-align:center;padding:8px;font-family:monospace,monospace;color:#dc2626;font-weight:700">'+disp+'</td>'
+      + '<td style="text-align:center;padding:8px"><span style="font-family:monospace,monospace;font-size:18px;font-weight:800;color:'+col+'">'+atCust+'</span></td>'
       + '<td style="text-align:center;padding:8px"><input class="inp-sm" type="number" id="ccth-'+p.id+'" value="'+th+'" min="0" style="width:60px;text-align:center" placeholder="0"></td>'
       + '<td style="text-align:center;padding:8px"><div class="status-dot '+(low?'dot-red':atCust>0?'dot-green':'dot-gray')+'"></div></td>'
       + '</tr>';
@@ -2279,7 +2273,7 @@ function renderPricing(){
             return`<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
               <span style="flex:1;font-size:12px;font-weight:500">${p.name}</span>
               <span class="badge ${cat?.type==='towel'?'bg-blue':'bg-green'}" style="font-size:9px">${cat?.type||'?'}</span>
-              <input type="text" id="pr-${c.id}-${p.id}" value="${price!=null?'$'+price.toFixed(2):''}" placeholder="—" readonly onclick="openKP('${p.name}','${c.name}\nEnter price in cents (250=$2.50)',(v)=>{setCustPrice('${c.id}','${p.id}',v/100);},${price!=null?Math.round(price*100):0},true)" style="width:72px;padding:5px 7px;text-align:right;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px">
+              <input type="text" id="pr-${c.id}-${p.id}" value="${price!=null?'$'+price.toFixed(2):''}" placeholder="—" readonly onclick="openKP('${p.name}','${c.name}\nEnter price in cents (250=$2.50)',(v)=>{setCustPrice('${c.id}','${p.id}',v/100);},${price!=null?Math.round(price*100):0},true)" style="width:72px;padding:5px 7px;text-align:right;cursor:pointer;font-family:monospace,monospace;font-size:12px">
             </div>`;
           }).join('');
         })()}
@@ -3456,7 +3450,7 @@ function renderRouteView() {
           return `<tr style="${edited?'background:#f0fdf4;':''}">
             <td><input type="number" value="${ro}" min="1" max="999"
               onchange="bulkSetRoute('${c.id}',this.value)"
-              style="width:60px;padding:6px 8px;text-align:center;font-family:'DM Mono',monospace;font-size:15px;font-weight:700;border:2px solid ${edited?'var(--accent)':'var(--border)'};border-radius:6px">
+              style="width:60px;padding:6px 8px;text-align:center;font-family:monospace,monospace;font-size:15px;font-weight:700;border:2px solid ${edited?'var(--accent)':'var(--border)'};border-radius:6px">
             </td>
             <td><strong style="font-size:13px">${c.name}</strong></td>
             <td style="font-size:12px;color:var(--muted)">${c.address||'—'}</td>
