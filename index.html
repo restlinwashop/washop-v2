@@ -1236,6 +1236,7 @@ function showPage(id){
   if(id==='dashboard')renderDashboard();
   if(id==='admin')renderAdmin();
   if(id==='pricing')renderPricing();
+  if(id==='receiving')updateProdSummary();
 }
 document.getElementById('topbar-date').textContent=fmtFull(todayStr());
 const _dashDateEl = document.getElementById('dash-date');
@@ -3846,10 +3847,19 @@ function initOperation() {
 
 function renderOperation() {
   const date = document.getElementById('op-date')?.value || todayStr();
-  const tomorrow = addDays(date, 1);
-  const dayAfter  = addDays(date, 2);
-  document.getElementById('op-date-label').textContent = fmtD(tomorrow) + ' + ' + fmtD(dayAfter);
   opQtys = {};
+
+  // ── Target dates: skip Sunday (no deliveries), use Saturday ──
+  // Operation runs Mon-Fri. Deliveries run Mon-Sat.
+  function nextOpDeliveryDay(fromDate, offset) {
+    let d = addDays(fromDate, offset);
+    const dow = new Date(d+'T00:00:00').getDay();
+    if(dow === 0) d = addDays(d, 6); // Sunday → previous Saturday
+    return d;
+  }
+  const tomorrow = nextOpDeliveryDay(date, 1);
+  const dayAfter  = nextOpDeliveryDay(date, 2);
+  document.getElementById('op-date-label').textContent = fmtD(tomorrow) + ' + ' + fmtD(dayAfter);
 
   // ── Required: pending orders for TOMORROW and DAY AFTER from selected date ──
   const targetOrders = S.orders.filter(o =>
@@ -4114,6 +4124,7 @@ loadFromDB = async function() {
   if(activePage === 'order') renderOrders();
   if(activePage === 'dispatch') renderDispatch();
   if(activePage === 'driver') renderDriverApp();
+  if(activePage === 'receiving') updateProdSummary();
 };
 
 // Patch showPage to init operation
