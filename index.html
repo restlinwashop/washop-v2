@@ -3942,12 +3942,12 @@ function renderOperation() {
   const date = document.getElementById('op-date')?.value || todayStr();
   opQtys = {};
 
-  // ── Target dates: skip Sunday (no deliveries), use Saturday ──
+  // ── Target dates: skip Sunday (no deliveries), jump to Monday ──
   // Operation runs Mon-Fri. Deliveries run Mon-Sat.
   function nextOpDeliveryDay(fromDate, offset) {
     let d = addDays(fromDate, offset);
     const dow = new Date(d+'T00:00:00').getDay();
-    if(dow === 0) d = addDays(d, 6); // Sunday → previous Saturday
+    if(dow === 0) d = addDays(d, 1); // Sunday → Monday
     return d;
   }
   const tomorrow = nextOpDeliveryDay(date, 1);
