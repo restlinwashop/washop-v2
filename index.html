@@ -1089,6 +1089,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
             <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:500;text-transform:none;letter-spacing:0"><input type="checkbox" value="6" class="cc-day-cb" style="width:auto"> Sat</label>
           </div></div>
         <div class="field"><label>Notes</label><textarea id="cc-notes" rows="2"></textarea></div>
+        <div class="field"><label>🔑 Access Code / Alarm</label><input id="cc-access-code" placeholder="e.g. 1234 or press # then 567"></div>
         <div class="field">
           <label>Next Delivery Override</label>
           <div style="display:flex;gap:8px;align-items:center">
@@ -2097,6 +2098,24 @@ function showDriverScreen(driverId){
   renderDriverApp();
 }
 
+function toggleDriverDetail(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+function adjDriverBags(oid, delta){
+  const o=S.orders.find(x=>x.id===oid); if(!o) return;
+  o.bagsCollected=Math.max(0,(o.bagsCollected||0)+delta);
+  const el=document.getElementById('dbags-'+oid);
+  if(el) el.textContent=o.bagsCollected;
+  // Save to DB debounced
+  clearTimeout(adjDriverBags._t);
+  adjDriverBags._t=setTimeout(()=>{
+    _patch('orders',{bags_collected:o.bagsCollected},'?id=eq.'+oid).catch(()=>{});
+  },800);
+}
+
 function driverLogout(){
   _activeDriverId=null; _driverPin=''; _driverPinLocked=false;
   localStorage.removeItem('washops_driver');
@@ -2136,25 +2155,67 @@ function renderDriverApp(){
     return ra-rb;
   });
 
-  if(!orders.length){list.innerHTML=`<div style="text-align:center;padding:40px;color:#9ca3af;font-size:15px">No deliveries for ${drv?.name}<br>on ${fmtD(date)}</div>`;return;}
-  list.innerHTML=orders.map(o=>`
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px;margin-bottom:14px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px">
-        <div style="font-weight:800;font-size:19px;line-height:1.2">${o.customerName}</div>
-        <span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;
-          background:${o.status==='delivered'?'#dcfce7':o.status==='packed'?'#fef9c3':'#f3f4f6'};
-          color:${o.status==='delivered'?'#16a34a':o.status==='packed'?'#854d0e':'#6b7280'}">
-          ${o.status.toUpperCase()}
-        </span>
+  list.innerHTML=orders.map(o=>{
+    const c=S.customers.find(x=>x.id===o.customerId);
+    const addr=c?.address||'';
+    const phone=c?.phone||'';
+    const notes=c?.notes||'';
+    const accessCode=c?.accessCode||'';
+    const detailId='ddetail-'+o.id;
+    return`
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;margin-bottom:14px;overflow:hidden">
+      <!-- Header -->
+      <div style="padding:16px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:19px;line-height:1.2">${o.customerName}</div>
+          ${addr?`<div style="font-size:13px;color:#6b7280;margin-top:4px">📍 ${addr}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;
+            background:${o.status==='delivered'?'#dcfce7':o.status==='packed'?'#fef9c3':'#f3f4f6'};
+            color:${o.status==='delivered'?'#16a34a':o.status==='packed'?'#854d0e':'#6b7280'}">
+            ${o.status.toUpperCase()}
+          </span>
+          <button ontouchstart="toggleDriverDetail('${detailId}')" onclick="toggleDriverDetail('${detailId}')"
+            style="font-size:12px;padding:4px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;cursor:pointer;color:#6b7280;-webkit-tap-highlight-color:transparent">
+            ℹ Details
+          </button>
+        </div>
       </div>
-      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">📦 ${o.bagCount} bag${o.bagCount>1?'s':''}</div>
-      <div style="border-top:1px solid #f3f4f6;padding-top:8px">
-        ${o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f9fafb;font-size:15px"><span>${it.productName}</span><span style="font-weight:700">${it.qty}</span></div>`).join('')}
+      <!-- Collapsible Detail -->
+      <div id="${detailId}" style="display:none;margin:0 18px 12px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:13px">
+        ${addr?`<div style="margin-bottom:6px"><span style="color:#9ca3af;font-weight:600">ADDRESS</span><br>${addr}</div>`:''}
+        ${phone?`<div style="margin-bottom:6px"><span style="color:#9ca3af;font-weight:600">PHONE</span><br><a href="tel:${phone}" style="color:#0284c7">${phone}</a></div>`:''}
+        ${accessCode?`<div style="margin-bottom:6px;padding:8px 10px;background:#fefce8;border:1px solid #fde68a;border-radius:6px"><span style="color:#9ca3af;font-weight:600">🔑 ACCESS CODE</span><br><strong style="font-size:16px;color:#92400e">${accessCode}</strong></div>`:''}
+        ${notes?`<div><span style="color:#9ca3af;font-weight:600">NOTES</span><br>${notes}</div>`:''}
+        ${!addr&&!phone&&!accessCode&&!notes?'<div style="color:#9ca3af">No details on file</div>':''}
       </div>
-      ${o.status==='packed'?`<button onclick="confirmDelivery('${o.id}')"
-        style="width:100%;margin-top:16px;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer">
-        ✓ Mark Delivered</button>`:''}
-    </div>`).join('');
+      <!-- Items -->
+      <div style="padding:0 18px 14px;border-top:1px solid #f3f4f6">
+        <div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;padding:10px 0 6px">Items · 📦 ${o.bagCount} bag${o.bagCount>1?'s':''}</div>
+        ${o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f9fafb;font-size:15px"><span>${it.productName}</span><span style="font-weight:700">${it.qty}</span></div>`).join('')}
+      </div>
+      <!-- Bag pickup -->
+      <div style="padding:14px 18px;background:#f9fafb;border-top:1px solid #f3f4f6">
+        <div style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📦 Bags Collected from Customer</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button ontouchstart="adjDriverBags('${o.id}',-1)" onclick="adjDriverBags('${o.id}',-1)"
+            style="width:44px;height:44px;border:2px solid #e5e7eb;border-radius:10px;background:#fff;font-size:22px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent">−</button>
+          <div id="dbags-${o.id}" style="font-size:26px;font-weight:800;min-width:40px;text-align:center">${o.bagsCollected||0}</div>
+          <button ontouchstart="adjDriverBags('${o.id}',1)" onclick="adjDriverBags('${o.id}',1)"
+            style="width:44px;height:44px;border:2px solid #e5e7eb;border-radius:10px;background:#fff;font-size:22px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent">+</button>
+          <span style="font-size:13px;color:#9ca3af">bags picked up</span>
+        </div>
+      </div>
+      <!-- Mark Delivered -->
+      ${o.status==='packed'?`<div style="padding:0 18px 18px">
+        <button ontouchstart="confirmDelivery('${o.id}')" onclick="confirmDelivery('${o.id}')"
+          style="width:100%;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent">
+          ✓ Mark Delivered
+        </button>
+      </div>`:''}
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -2296,6 +2357,7 @@ function openCC(id){
     cb.checked = days.includes(parseInt(cb.value));
   });
   document.getElementById('cc-notes').value=c.notes||'';
+  document.getElementById('cc-access-code').value=c.accessCode||'';
   document.getElementById('cc-active').value=c.active?'1':'0';
   const ctEl = document.getElementById('cc-ctype');
   if(ctEl) ctEl.value = c.custType||'';
@@ -2916,7 +2978,7 @@ async function loadFromDB() {
       deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4],
       dayDrivers: c.day_drivers ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : null,
       email:c.email||'', phone:c.phone||'',
-      notes:c.notes||'', active:c.active!==0, driverId:c.driver_id||null, routeOrder:c.route_order||99
+      notes:c.notes||'', accessCode:c.access_code||'', active:c.active!==0, driverId:c.driver_id||null, routeOrder:c.route_order||99
     }));
     S.drivers     = drvs.map(d => ({id:d.id, name:d.name, vehicle:d.vehicle||'', pin:d.pin||''}));
     S.categories  = cats.map(c => ({id:c.id, name:c.name, type:c.type||'linen'}));
@@ -2941,7 +3003,7 @@ async function loadFromDB() {
       items:imap[o.id]||[], bagCount:o.bag_count||1,
       deliveryDate:o.delivery_date, status:o.status||'pending',
       note:o.note||'', isManual:o.is_manual||false,
-      checkedItems:o.checked_items||{}
+      checkedItems:o.checked_items||{}, bagsCollected:o.bags_collected||0
     }));
 
     const rmap = {};
@@ -3210,8 +3272,8 @@ saveCCdetails = async function() {
   const ccDays=[...document.querySelectorAll('.cc-day-cb:checked')].map(x=>parseInt(x.value));
   const newCustType = document.getElementById('cc-ctype')?.value || null;
   const newOverride = document.getElementById('cc-next-override')?.value || null;
-  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:ccDays[0]||4,deliveryDays:ccDays.length?ccDays:[4],email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,active:parseInt(document.getElementById('cc-active').value)===1,custType:newCustType,nextDeliveryOverride:newOverride};
-  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,delivery_days:JSON.stringify(upd.deliveryDays),email:upd.email,phone:upd.phone,notes:upd.notes,active:upd.active?1:0,cust_type:upd.custType||null,next_delivery_override:upd.nextDeliveryOverride||null},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
+  const upd = {name:document.getElementById('cc-name').value,address:document.getElementById('cc-addr').value,frequency:document.getElementById('cc-freq').value,dueDay:ccDays[0]||4,deliveryDays:ccDays.length?ccDays:[4],email:document.getElementById('cc-email').value,phone:document.getElementById('cc-phone').value,notes:document.getElementById('cc-notes').value,accessCode:document.getElementById('cc-access-code').value||'',active:parseInt(document.getElementById('cc-active').value)===1,custType:newCustType,nextDeliveryOverride:newOverride};
+  try { await _patch('customers',{name:upd.name,address:upd.address,frequency:upd.frequency,due_day:upd.dueDay,delivery_days:JSON.stringify(upd.deliveryDays),email:upd.email,phone:upd.phone,notes:upd.notes,access_code:upd.accessCode,active:upd.active?1:0,cust_type:upd.custType||null,next_delivery_override:upd.nextDeliveryOverride||null},'?id=eq.'+ccId); } catch(e) { alert('DB error: '+e.message); return; }
   Object.assign(c, upd);
   if(upd.nextDeliveryOverride !== undefined) c.nextDeliveryOverride = upd.nextDeliveryOverride;   if(upd.custType) { await autoAssignBags(ccId); if(document.getElementById("cc-products").classList.contains("active")) renderCCprods(); }
   renderAdmin(); _toast('✓ Saved', 2000);
@@ -3597,6 +3659,7 @@ const PINS = {
   '2291': 'receiving',   // Receiving only
   '4782': 'operation',   // Operation + view Dispatch
   '3847': 'order',       // Order/Pack + Dispatch + view Operation
+  '5555': 'driver',      // Driver App only
   '6451': 'admin',       // Full access
 };
 
@@ -3618,6 +3681,11 @@ const ACCESS = {
     pages:    ['order', 'dispatch', 'dashboard'],
     readOnly: ['operation'],
     label:    'Order Staff'
+  },
+  driver: {
+    pages:    ['driver'],
+    readOnly: [],
+    label:    'Driver'
   },
   admin: {
     pages:    ['dashboard','receiving','order','dispatch','operation','stock','history','driver','bulk','admin','pricing'],
@@ -3683,6 +3751,14 @@ function _applyAccessLevel(level) {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById('page-receiving').classList.add('active');
     document.getElementById('page-title').textContent = 'Receiving';
+  } else if(level === 'driver') {
+    // No sidebar — full screen driver app
+    sidebar.style.display = 'none';
+    main.style.marginLeft = '0';
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-driver').classList.add('active');
+    document.getElementById('page-title').textContent = 'Driver App';
+    initDriverApp();
   } else {
     sidebar.style.display = 'flex';
     main.style.marginLeft = '';
