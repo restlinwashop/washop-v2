@@ -614,17 +614,26 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     <!-- Driver PIN Login -->
     <div id="driver-pin-screen" style="max-width:360px;margin:0 auto;padding:20px 0">
       <div style="text-align:center;margin-bottom:24px">
-        <div style="font-size:32px;margin-bottom:8px">🚚</div>
-        <div style="font-size:22px;font-weight:800;color:#111">Driver Login</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px">Enter your PIN to see your deliveries</div>
+        <div style="font-size:40px;margin-bottom:8px">🚚</div>
+        <div style="font-size:24px;font-weight:800;color:#111">Driver Login</div>
+        <div style="font-size:14px;color:#6b7280;margin-top:6px">Enter your PIN to see your deliveries</div>
       </div>
-      <div id="driver-pin-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px;text-align:center;color:#dc2626;font-size:13px;margin-bottom:12px">Incorrect PIN. Try again.</div>
-      <div style="background:#fff;border:2px solid var(--border);border-radius:16px;padding:20px">
-        <div style="font-size:28px;font-weight:700;text-align:center;letter-spacing:8px;min-height:44px;color:#111;margin-bottom:16px" id="driver-pin-display">––––</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-          ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>`
-            <button onclick="driverPinKey('${k}')" style="padding:18px;font-size:22px;font-weight:700;border:2px solid #e5e7eb;border-radius:12px;background:#f9fafb;cursor:pointer;${k===''?'visibility:hidden':''}">${k}</button>
-          `).join('')}
+      <div id="driver-pin-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;text-align:center;color:#dc2626;font-size:14px;margin-bottom:14px">Incorrect PIN. Try again.</div>
+      <div style="background:#fff;border:2px solid #e5e7eb;border-radius:20px;padding:24px">
+        <div id="driver-pin-display" style="font-size:36px;font-weight:700;text-align:center;letter-spacing:12px;min-height:52px;color:#111;margin-bottom:20px">– – – –</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+          <button ontouchstart="driverPinKey('1')" onclick="driverPinKey('1')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">1</button>
+          <button ontouchstart="driverPinKey('2')" onclick="driverPinKey('2')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">2</button>
+          <button ontouchstart="driverPinKey('3')" onclick="driverPinKey('3')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">3</button>
+          <button ontouchstart="driverPinKey('4')" onclick="driverPinKey('4')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">4</button>
+          <button ontouchstart="driverPinKey('5')" onclick="driverPinKey('5')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">5</button>
+          <button ontouchstart="driverPinKey('6')" onclick="driverPinKey('6')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">6</button>
+          <button ontouchstart="driverPinKey('7')" onclick="driverPinKey('7')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">7</button>
+          <button ontouchstart="driverPinKey('8')" onclick="driverPinKey('8')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">8</button>
+          <button ontouchstart="driverPinKey('9')" onclick="driverPinKey('9')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">9</button>
+          <div></div>
+          <button ontouchstart="driverPinKey('0')" onclick="driverPinKey('0')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;cursor:pointer;-webkit-tap-highlight-color:transparent">0</button>
+          <button ontouchstart="driverPinKey('⌫')" onclick="driverPinKey('⌫')" style="padding:22px;font-size:24px;font-weight:700;border:2px solid #e5e7eb;border-radius:14px;background:#fef2f2;cursor:pointer;-webkit-tap-highlight-color:transparent">⌫</button>
         </div>
       </div>
     </div>
@@ -2022,14 +2031,15 @@ function printDriverSheet(){
 // ═══════════════════════════════════════════════
 // DRIVER APP
 // ═══════════════════════════════════════════════
-let _driverPin='', _activeDriverId=null;
+let _driverPin='', _activeDriverId=null, _driverPinLocked=false;
 
 function initDriverApp(){
   document.getElementById('driver-pin-screen').style.display='block';
   document.getElementById('driver-app-screen').style.display='none';
-  document.getElementById('driver-pin-display').textContent='––––';
+  document.getElementById('driver-pin-display').textContent='– – – –';
   document.getElementById('driver-pin-error').style.display='none';
   _driverPin='';
+  _driverPinLocked=false;
   // Restore saved session
   const saved=localStorage.getItem('washops_driver');
   if(saved&&S.drivers.find(d=>d.id===saved)){
@@ -2039,16 +2049,42 @@ function initDriverApp(){
 }
 
 function driverPinKey(k){
+  // Prevent double-fire from touch+click
+  if(_driverPinLocked) return;
   if(k==='') return;
-  if(k==='⌫'){ _driverPin=_driverPin.slice(0,-1); }
-  else { if(_driverPin.length>=4) return; _driverPin+=String(k); }
+  if(k==='⌫'){
+    _driverPin=_driverPin.slice(0,-1);
+  } else {
+    if(_driverPin.length>=4) return;
+    _driverPin+=String(k);
+  }
   const disp=document.getElementById('driver-pin-display');
-  disp.textContent=('●'.repeat(_driverPin.length)+'–'.repeat(4-_driverPin.length)).split('').join(' ');
+  const dots='●'.repeat(_driverPin.length)+'–'.repeat(4-_driverPin.length);
+  disp.textContent=dots.split('').join(' ');
   document.getElementById('driver-pin-error').style.display='none';
+
   if(_driverPin.length===4){
+    _driverPinLocked=true;
+    // Check admin PIN — goes to full system
+    if(_driverPin==='6451'){
+      _driverPin=''; _driverPinLocked=false;
+      // Close driver app, open full PIN screen
+      document.getElementById('driver-pin-screen').style.display='none';
+      window._adminFromDriver=true;
+      showPage('dashboard');
+      return;
+    }
+    // Check driver PINs
     const drv=S.drivers.find(d=>d.pin===_driverPin);
-    if(drv){ _activeDriverId=drv.id; localStorage.setItem('washops_driver',drv.id); showDriverScreen(drv.id); }
-    else { document.getElementById('driver-pin-error').style.display='block'; setTimeout(()=>{_driverPin='';disp.textContent='– – – –';},1000); }
+    if(drv){
+      _activeDriverId=drv.id;
+      localStorage.setItem('washops_driver',drv.id);
+      showDriverScreen(drv.id);
+    } else {
+      document.getElementById('driver-pin-error').style.display='block';
+      disp.textContent='– – – –';
+      setTimeout(()=>{ _driverPin=''; _driverPinLocked=false; },800);
+    }
   }
 }
 
