@@ -1194,7 +1194,7 @@ function filterCusts(q){
   dd.innerHTML=m.map(c=>`<div class="cust-dd-item" onmousedown="selectRecvCust('${c.id}')"><div class="cust-dd-name">${c.name}</div><div class="cust-dd-meta">${c.frequency} · ${c.address}</div></div>`).join('');
   dd.style.display='block';
 }
-function selectRecvCust(id){
+async function selectRecvCust(id){
   recvCid=id;
   const c=S.customers.find(x=>x.id===id);
   document.getElementById('recv-search').value=c.name;
@@ -1210,6 +1210,28 @@ function selectRecvCust(id){
   document.getElementById('recv-panel').style.display='block';
   document.getElementById('recv-empty').style.display='none';
   recvQtys={};recvCatId=null;
+
+  // Always reload products fresh from DB
+  try {
+    const fresh = await _get('cust_products','?cust_id=eq.'+id+'&select=product_id');
+    custProds[id] = new Set(fresh.map(r=>r.product_id));
+  } catch(e){}
+
+  // Auto-assign laundry bag if customer type is set but bag is missing
+  if(c.custType) {
+    const purpleProd = S.products.find(p => /laundry bag \(purple\)/i.test(p.name));
+    const blackProd  = S.products.find(p => /laundry bag \(black\)/i.test(p.name));
+    const s = getCustProds(id);
+    const needsPurple = (c.custType==='linen'||c.custType==='both') && purpleProd && !s.has(purpleProd.id);
+    const needsBlack  = (c.custType==='towel'||c.custType==='both') && blackProd  && !s.has(blackProd.id);
+    if(needsPurple || needsBlack) {
+      const toAdd = [];
+      if(needsPurple){ s.add(purpleProd.id); toAdd.push({cust_id:id,product_id:purpleProd.id}); }
+      if(needsBlack) { s.add(blackProd.id);  toAdd.push({cust_id:id,product_id:blackProd.id}); }
+      await _post('cust_products', toAdd).catch(()=>{});
+    }
+  }
+
   renderRecvProds();
 }
 function clearRecv(){recvCid=null;recvQtys={};recvCatId=null;document.getElementById('recv-search').value='';document.getElementById('cust-dd').style.display='none';document.getElementById('recv-sel-bar').style.display='none';document.getElementById('recv-panel').style.display='none';document.getElementById('recv-empty').style.display='block';}
