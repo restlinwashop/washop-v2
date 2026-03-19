@@ -848,6 +848,10 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       <div class="field"><label>Delivery Date</label><input type="date" id="eo-date"></div>
       <div class="field"><label>Note</label><input id="eo-note"></div>
     </div>
+    <div style="margin-bottom:14px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:13px;color:#1d4ed8;font-weight:600">📦 Convert to PU Only — remove all items, pickup only</div>
+      <button class="btn btn-sm" style="background:#1d4ed8;color:#fff" onclick="setOrderPUO()">Set as PU Only</button>
+    </div>
     <div class="section-title">Item Quantities</div>
     <div id="eo-items"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
@@ -1148,12 +1152,18 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       <button class="btn btn-sm btn-secondary" onclick="closeMO()">✕</button>
     </div>
     <div class="grid-2">
-      <div class="field"><label>Customer</label><select id="mo-cust"><option value="">Select...</option></select></div>
+      <div class="field"><label>Customer</label><select id="mo-cust" onchange="toggleMOPUO()"><option value="">Select...</option></select></div>
       <div class="field"><label>Delivery Date</label><input type="date" id="mo-date"></div>
     </div>
     <div class="field"><label>Note</label><input id="mo-note" placeholder="e.g. Labour Day makeup delivery"></div>
-    <div class="section-title">Items</div>
-    <div id="mo-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px;margin-bottom:16px"></div>
+    <div style="margin-bottom:14px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;display:flex;align-items:center;gap:10px">
+      <input type="checkbox" id="mo-puo" onchange="toggleMOPUO()" style="width:18px;height:18px;cursor:pointer;accent-color:#1d4ed8">
+      <label for="mo-puo" style="margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:#1d4ed8;cursor:pointer">📦 PU Only — pickup without delivery (no items needed)</label>
+    </div>
+    <div id="mo-items-section">
+      <div class="section-title">Items</div>
+      <div id="mo-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px;margin-bottom:16px"></div>
+    </div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-secondary" onclick="closeMO()">Cancel</button>
       <button class="btn btn-primary" onclick="saveMO()">Add Order</button>
@@ -1760,7 +1770,7 @@ function renderOrders(){
               <span class="order-row-cust">${o.customerName}</span>
               <span class="order-row-meta">${c.frequency||''}</span>
               <span class="badge ${o.status==='pending'?'bg-warn':o.status==='packed'?'bg-green':'bg-gray'}" style="margin-left:10px">${o.status.toUpperCase()}</span>
-              ${o.note?`<span style="font-size:11px;color:var(--muted);margin-left:8px">📝 ${o.note}</span>`:''}
+              ${o.note?`<span style="font-size:11px;font-weight:700;${o.note==='PU Only'?'background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;':'color:var(--muted);'}margin-left:8px">${o.note==='PU Only'?'📦 PU ONLY':'📝 '+o.note}</span>`:''}
               <span style="margin-left:10px;font-size:12px;color:var(--muted)">▾</span>
             </div>
             <div class="order-row-items" id="oe-${o.id}-${g.type}">
@@ -1882,6 +1892,11 @@ function openManualModal(){
   document.getElementById('mo-date').value=selDay||todayStr();
   document.getElementById('mo-note').value='';
   moQtys={};
+  // Reset PUO
+  const puoChk=document.getElementById('mo-puo');
+  if(puoChk){puoChk.checked=false;}
+  const sec=document.getElementById('mo-items-section');
+  if(sec) sec.style.display='block';
   document.getElementById('mo-grid').innerHTML=S.products.map(p=>`
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text)">${p.name}</div>
@@ -1898,14 +1913,31 @@ function closeMO(){document.getElementById('mo-modal').classList.remove('open');
 async function saveMO(){
   const cid=document.getElementById('mo-cust').value;const date=document.getElementById('mo-date').value;
   if(!cid||!date)return alert('Select customer and date.');
-  const items=S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
-  if(!items.length)return alert('Add at least one item.');
+  const isPUO=document.getElementById('mo-puo')?.checked;
   const c=S.customers.find(x=>x.id===cid);
   const oid=uid();
-  const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note:document.getElementById('mo-note').value,isManual:true,checkedItems:{}};
-  // Save to DB first
+  const note=isPUO?'PU Only':(document.getElementById('mo-note').value||'');
+
+  if(isPUO){
+    // PU Only — no items needed
+    const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,
+      items:[],deliveryDate:date,bagCount:1,status:'pending',note:'PU Only',isManual:true,checkedItems:{}};
+    try {
+      await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,
+        delivery_date:date,bag_count:1,status:'pending',note:'PU Only',is_manual:true,checked_items:{}}]);
+      S.orders.push(order);
+      addActivity('PU Only order: '+c.name+' for '+fmtD(date));
+      closeMO();renderOrders();updateOrderBadge();
+      _toast('✓ PU Only order added',2000);
+    } catch(e){ alert('DB error: '+e.message); }
+    return;
+  }
+
+  const items=S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
+  if(!items.length)return alert('Add at least one item.');
+  const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note,isManual:true,checkedItems:{}};
   try {
-    await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note:order.note,is_manual:true,checked_items:{}}]);
+    await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note,is_manual:true,checked_items:{}}]);
     await _post('order_items',items.map(it=>({id:uid(),order_id:oid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
     S.orders.push(order);
     addActivity('Manual order: '+c.name+' for '+fmtD(date));
@@ -1916,8 +1948,34 @@ async function saveMO(){
   }
 }
 
-// EDIT/DELETE ORDER (#1)
-let eoId=null;
+function setOrderPUO(){
+  if(!confirm('Convert this order to PU Only? All items will be removed. This cannot be undone.')) return;
+  const o=S.orders.find(x=>x.id===eoId); if(!o) return;
+  o.items=[];
+  o.note='PU Only';
+  document.getElementById('eo-note').value='PU Only';
+  document.getElementById('eo-items').innerHTML='<div style="padding:12px;text-align:center;color:#1d4ed8;font-weight:600;background:#eff6ff;border-radius:8px">📦 PU Only — no items, pickup only</div>';
+  // Save immediately to DB
+  const _origSaveEO_ref = _origSaveEO || saveEO;
+  closeEO();
+  // Patch via DB override
+  const patch = async () => {
+    try {
+      await _del('order_items','?order_id=eq.'+o.id);
+      await _patch('orders',{note:'PU Only'},'?id=eq.'+o.id);
+    } catch(e){}
+  };
+  patch();
+  renderOrders();updateOrderBadge();
+  addActivity('Set as PU Only: '+o.customerName);
+  _toast('✓ Converted to PU Only',2000);
+}
+
+function toggleMOPUO(){
+  const isPUO=document.getElementById('mo-puo')?.checked;
+  const sec=document.getElementById('mo-items-section');
+  if(sec) sec.style.display=isPUO?'none':'block';
+}
 function openEO(id){
   eoId=id;const o=S.orders.find(x=>x.id===id);if(!o)return;
   document.getElementById('eo-title').textContent='Edit Order — '+o.customerName;
