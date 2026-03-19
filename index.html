@@ -441,8 +441,35 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 <!-- ════ RECEIVING ════ -->
   <div class="page" id="page-receiving">
     <div class="prod-bar">
-      <div class="prod-bar-hdr"><div class="prod-bar-title">📋 Today's Production Target</div><span id="prod-date" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)"></span></div>
-      <div class="ps-grid" id="prod-grid"><div style="font-size:12px;color:var(--muted)">Receive items to see targets</div></div>
+      <div class="prod-bar-hdr">
+        <div class="prod-bar-title">📥 Received Items</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+          <input type="date" id="prod-filter-date" onchange="updateProdSummary()" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('prod-filter-date').value='';updateProdSummary()">Today</button>
+          <button class="btn btn-sm btn-secondary" onclick="exportReceivedCSV()">⇩ CSV</button>
+        </div>
+      </div>
+      <div class="ps-grid" id="prod-grid"><div style="font-size:12px;color:var(--muted)">No items received yet</div></div>
+    </div>
+    <div class="prod-bar" style="border-top:2px solid #e5e7eb;margin-top:0">
+      <div class="prod-bar-hdr">
+        <div class="prod-bar-title">🚚 Dispatched Items</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+          <input type="date" id="disp-filter-date" onchange="updateDispSummary()" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px">
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('disp-filter-date').value='';updateDispSummary()">Today</button>
+          <select id="disp-filter-month" onchange="updateDispSummary()" style="padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:6px">
+            <option value="">— Month —</option>
+            <option value="2026-01">Jan 2026</option>
+            <option value="2026-02">Feb 2026</option>
+            <option value="2026-03">Mar 2026</option>
+            <option value="2026-04">Apr 2026</option>
+            <option value="2026-05">May 2026</option>
+            <option value="2026-06">Jun 2026</option>
+          </select>
+          <button class="btn btn-sm btn-secondary" onclick="exportDispatchedCSV()">⇩ CSV</button>
+        </div>
+      </div>
+      <div class="ps-grid" id="disp-grid"><div style="font-size:12px;color:var(--muted)">No dispatched items</div></div>
     </div>
     <div class="card">
       <div class="card-header"><div class="card-title">📦 Receive Goods</div></div>
@@ -1236,13 +1263,13 @@ function showPage(id){
   if(id==='dashboard')renderDashboard();
   if(id==='admin')renderAdmin();
   if(id==='pricing')renderPricing();
-  if(id==='receiving')updateProdSummary();
+  if(id==='receiving'){updateProdSummary();updateDispSummary();}
 }
 document.getElementById('topbar-date').textContent=fmtFull(todayStr());
 const _dashDateEl = document.getElementById('dash-date');
 if(_dashDateEl) _dashDateEl.value = todayStr();
 document.getElementById('recv-date').value=todayStr();
-document.getElementById('prod-date').textContent=fmtFull(todayStr());
+// prod-date element removed
 
 // ═══════════════════════════════════════════════
 // KEYPAD (#6 decimal for prices)
@@ -1486,19 +1513,19 @@ function renderRecvLog(){
   document.getElementById('recv-log-cnt').textContent=entries.length+' entries';
 }
 function updateProdSummary(){
-  // Show today's RECEIVED items (from receiving log) — not orders
-  const today=todayStr();
-  const tot={},prodInfo={};
+  const filterDate = document.getElementById('prod-filter-date')?.value || todayStr();
+  const tot={}, prodInfo={};
   S.receivingLog.forEach(log=>{
-    if(log.receivedOn!==today)return;
+    if(log.receivedOn !== filterDate) return;
     (log.items||[]).forEach(it=>{
       tot[it.productName]=(tot[it.productName]||0)+it.qty;
-      if(!prodInfo[it.productName])prodInfo[it.productName]=prodType(it.productId);
+      if(!prodInfo[it.productName]) prodInfo[it.productName]=prodType(it.productId);
     });
   });
   const keys=Object.keys(tot);
   const g=document.getElementById('prod-grid');
-  if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">No items received today yet</div>';return;}
+  if(!g) return;
+  if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">No items received on '+fmtD(filterDate)+'</div>';return;}
   g.innerHTML=keys.map(k=>{
     const type=prodInfo[k]||'linen';
     const borderColor=type==='towel'?'#3b82f6':'#16a34a';
@@ -1506,9 +1533,74 @@ function updateProdSummary(){
     return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor}">
       <div class="ps-label">${k}</div>
       <div class="ps-val" style="color:${borderColor}">${tot[k]}</div>
-      <div class="ps-sub">received today</div>
+      <div class="ps-sub">${fmtD(filterDate)}</div>
     </div>`;
   }).join('');
+}
+
+function updateDispSummary(){
+  const filterDate = document.getElementById('disp-filter-date')?.value || '';
+  const filterMonth = document.getElementById('disp-filter-month')?.value || '';
+  const tot={}, prodInfo={};
+  S.history.filter(h=>h.type==='dispatch').forEach(h=>{
+    if(filterDate && h.date !== filterDate) return;
+    if(filterMonth && !h.date.startsWith(filterMonth)) return;
+    const p=S.products.find(x=>x.id===h.productId);
+    const name=p?.name||h.productId;
+    tot[name]=(tot[name]||0)+h.qty;
+    if(!prodInfo[name]) prodInfo[name]=prodType(h.productId);
+  });
+  const keys=Object.keys(tot).sort();
+  const g=document.getElementById('disp-grid');
+  if(!g) return;
+  const label = filterDate ? fmtD(filterDate) : filterMonth ? filterMonth : 'All time';
+  if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">No dispatched items for '+label+'</div>';return;}
+  g.innerHTML=keys.map(k=>{
+    const type=prodInfo[k]||'linen';
+    const borderColor=type==='towel'?'#3b82f6':'#16a34a';
+    const bgColor=type==='towel'?'#eff6ff':'#f0fdf4';
+    return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor}">
+      <div class="ps-label">${k}</div>
+      <div class="ps-val" style="color:${borderColor}">${tot[k]}</div>
+      <div class="ps-sub">${label}</div>
+    </div>`;
+  }).join('');
+}
+
+function exportReceivedCSV(){
+  const filterDate = document.getElementById('prod-filter-date')?.value || todayStr();
+  const rows=[['Date','Customer','Product','Category','Qty','Delivery Date']];
+  S.receivingLog.filter(l=>l.receivedOn===filterDate).forEach(l=>{
+    (l.items||[]).forEach(it=>{
+      const cat=S.categories.find(c=>c.id===it.catId);
+      rows.push([l.receivedOn, l.customerName, it.productName, cat?.name||'', it.qty, l.deliveryDate]);
+    });
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='received_'+filterDate+'.csv';
+  a.click();
+}
+
+function exportDispatchedCSV(){
+  const filterDate = document.getElementById('disp-filter-date')?.value || '';
+  const filterMonth = document.getElementById('disp-filter-month')?.value || '';
+  const label = filterDate||filterMonth||'all';
+  const rows=[['Date','Customer','Product','Category','Qty']];
+  S.history.filter(h=>h.type==='dispatch').forEach(h=>{
+    if(filterDate && h.date!==filterDate) return;
+    if(filterMonth && !h.date.startsWith(filterMonth)) return;
+    const p=S.products.find(x=>x.id===h.productId);
+    const c=S.customers.find(x=>x.id===h.customerId);
+    const cat=S.categories.find(x=>x.id===p?.catId);
+    rows.push([h.date, c?.name||h.customerId, p?.name||h.productId, cat?.name||'', h.qty]);
+  });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='dispatched_'+label+'.csv';
+  a.click();
 }
 
 // ═══════════════════════════════════════════════
@@ -4124,7 +4216,7 @@ loadFromDB = async function() {
   if(activePage === 'order') renderOrders();
   if(activePage === 'dispatch') renderDispatch();
   if(activePage === 'driver') renderDriverApp();
-  if(activePage === 'receiving') updateProdSummary();
+  if(activePage === 'receiving'){updateProdSummary();updateDispSummary();}
 };
 
 // Patch showPage to init operation
