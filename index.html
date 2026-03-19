@@ -1697,7 +1697,17 @@ function printDriverSheet(){
   w.document.write(`<html><body style="font-family:sans-serif;padding:20px"><h2>Driver Sheet — ${fmtFull(todayStr())}</h2>
     <table border="1" cellpadding="8" style="width:100%;border-collapse:collapse"><thead><tr><th>Driver</th><th>Customer</th><th>Items</th><th>Bags</th></tr></thead>
     <tbody>${packed.map(o=>{const d=S.drivers.find(x=>x.id===o.driverId);return`<tr><td>${d?.name||'—'}</td><td><b>${o.customerName}</b></td><td>${o.items.map(i=>i.productName+' ('+i.qty+')').join(', ')}</td><td>${o.bagCount}</td></tr>`;}).join('')}</tbody></table>
-    <script>window.print();<\/script></body></html>`);
+    <script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.insertAdjacentHTML('beforeend',
+    '<div style="position:fixed;bottom:0;left:0;right:0;background:#dc2626;color:#fff;padding:12px 16px;font-size:13px;z-index:99999;font-family:monospace">' +
+    '🚨 JS Error: ' + msg + ' (line ' + line + ')' +
+    '</div>'
+  );
+  return false;
+};
+</script>
+<script>window.print();<\/script></body></html>`);
 }
 
 // ═══════════════════════════════════════════════
