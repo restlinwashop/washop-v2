@@ -1202,6 +1202,8 @@ function nextDeliveryDate(cust, fromDate) {
 
 // FIX: "not due" — check delivery date vs customer's scheduled pattern, NOT current date
 function isCustomerDueOnDate(cust, dateStr){
+  // If there's an override, only due on that specific date
+  if(cust.nextDeliveryOverride) return dateStr === cust.nextDeliveryOverride;
   const d=new Date(dateStr+'T00:00:00');
   const wd=d.getDay();
   if(cust.frequency==='Daily')return true;
@@ -2777,13 +2779,24 @@ markPacked = async function(id) {
 const _origConfirmDelivery = confirmDelivery;
 confirmDelivery = async function(id) {
   const o = S.orders.find(x => x.id===id); if (!o) return;
+  // Prevent double-tap
+  if(o._delivering) return;
+  o._delivering = true;
   try {
     await _patch('orders',{status:'delivered'},'?id=eq.'+id);
     await _post('history', o.items.map(it => ({id:uid(),date:todayStr(),customer_id:o.customerId,product_id:it.productId,qty:it.qty,type:'dispatch'})));
-    // Deduct laundry bags from stock
     await deductBagsOnDelivery(o).catch(()=>{});
-  } catch(e) { console.warn('delivery DB:', e); }
-  _origConfirmDelivery(id);
+  } catch(e) { console.warn('delivery DB:', e); o._delivering=false; return; }
+  // Update local state directly — don't call _origConfirmDelivery to avoid double activity
+  o.status='delivered';
+  o.items.forEach(it=>{
+    const se=S.stockEntries.find(s=>s.customerId===o.customerId&&s.productId===it.productId);
+    if(se)se.currentStock=Math.max(0,(se.currentStock||0)-it.qty);
+  });
+  addActivity(`Delivered: ${o.customerName}`);
+  renderDispatch();
+  renderDriverApp();
+  checkAlarms();
 };
 
 const _origSaveEO = saveEO;
@@ -3154,7 +3167,7 @@ toggleChip = function(oid, pid, type, el) {
 };
 
 // Auto-refresh every 60s (multi-device sync)
-setInterval(loadFromDB, 30000);
+setInterval(loadFromDB, 15000);
 
 // ── Boot ──────────────────────────────────────────────────────────────────
 // Add sync badge to topbar
@@ -4060,6 +4073,7 @@ loadFromDB = async function() {
   if(activePage === 'dashboard') renderDashboard();
   if(activePage === 'order') renderOrders();
   if(activePage === 'dispatch') renderDispatch();
+  if(activePage === 'driver') renderDriverApp();
 };
 
 // Patch showPage to init operation
