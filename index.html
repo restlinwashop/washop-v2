@@ -611,18 +611,37 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 
   <!-- ════ DRIVER APP ════ -->
   <div class="page" id="page-driver">
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:13px 18px;margin-bottom:18px;font-size:13px;color:var(--accent);display:flex;align-items:center;gap:10px">
-      📱 Mobile view — drivers select their name and see their delivery list
-    </div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-      <div class="field" style="min-width:240px;margin-bottom:0"><label>Select Driver</label>
-        <select id="driver-sel" onchange="renderDriverApp()"><option value="">Select driver...</option></select>
+    <!-- Driver PIN Login -->
+    <div id="driver-pin-screen" style="max-width:360px;margin:0 auto;padding:20px 0">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:32px;margin-bottom:8px">🚚</div>
+        <div style="font-size:22px;font-weight:800;color:#111">Driver Login</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">Enter your PIN to see your deliveries</div>
       </div>
-      <div class="field" style="min-width:170px;margin-bottom:0"><label>Date</label>
-        <input type="date" id="driver-date" onchange="renderDriverApp()">
+      <div id="driver-pin-error" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px;text-align:center;color:#dc2626;font-size:13px;margin-bottom:12px">Incorrect PIN. Try again.</div>
+      <div style="background:#fff;border:2px solid var(--border);border-radius:16px;padding:20px">
+        <div style="font-size:28px;font-weight:700;text-align:center;letter-spacing:8px;min-height:44px;color:#111;margin-bottom:16px" id="driver-pin-display">––––</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>`
+            <button onclick="driverPinKey('${k}')" style="padding:18px;font-size:22px;font-weight:700;border:2px solid #e5e7eb;border-radius:12px;background:#f9fafb;cursor:pointer;${k===''?'visibility:hidden':''}">${k}</button>
+          `).join('')}
+        </div>
       </div>
     </div>
-    <div id="driver-app-list"><div class="empty">Select a driver to see today's deliveries</div></div>
+    <!-- Driver Delivery List -->
+    <div id="driver-app-screen" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:20px;font-weight:800" id="driver-app-name">—</div>
+          <div style="font-size:13px;color:var(--muted)" id="driver-app-date-label">—</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="date" id="driver-date" onchange="renderDriverApp()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <button onclick="driverLogout()" style="padding:8px 14px;border:1px solid #e5e7eb;border-radius:8px;background:#f9fafb;font-size:13px;cursor:pointer">🔒 Logout</button>
+        </div>
+      </div>
+      <div id="driver-app-list"><div class="empty">No deliveries</div></div>
+    </div>
   </div>
 
   <!-- ════ ADMIN ════ -->
@@ -733,6 +752,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
         <div class="add-row">
           <div class="field"><label>Name</label><input id="nd-name" placeholder="e.g. James"></div>
           <div class="field"><label>Vehicle</label><input id="nd-vehicle" placeholder="e.g. LDV Van 1ABC234"></div>
+          <div class="field" style="max-width:120px"><label>PIN (4 digits)</label><input id="nd-pin" placeholder="e.g. 1234" maxlength="4" type="number"></div>
           <button class="btn btn-primary" style="height:40px;margin-top:21px" onclick="addDriver()">Add</button>
         </div>
       </div>
@@ -2002,48 +2022,102 @@ function printDriverSheet(){
 // ═══════════════════════════════════════════════
 // DRIVER APP
 // ═══════════════════════════════════════════════
+let _driverPin='', _activeDriverId=null;
+
 function initDriverApp(){
-  const sel=document.getElementById('driver-sel');
-  sel.innerHTML='<option value="">Select driver...</option>'+S.drivers.map(d=>`<option value="${d.id}">${d.name} — ${d.vehicle}</option>`).join('');
-  // Remember last selected driver
+  document.getElementById('driver-pin-screen').style.display='block';
+  document.getElementById('driver-app-screen').style.display='none';
+  document.getElementById('driver-pin-display').textContent='––––';
+  document.getElementById('driver-pin-error').style.display='none';
+  _driverPin='';
+  // Restore saved session
   const saved=localStorage.getItem('washops_driver');
-  if(saved&&sel.querySelector(`option[value="${saved}"]`)) sel.value=saved;
-  sel.onchange=function(){ localStorage.setItem('washops_driver',this.value); renderDriverApp(); };
+  if(saved&&S.drivers.find(d=>d.id===saved)){
+    _activeDriverId=saved;
+    showDriverScreen(saved);
+  }
+}
+
+function driverPinKey(k){
+  if(k==='') return;
+  if(k==='⌫'){ _driverPin=_driverPin.slice(0,-1); }
+  else { if(_driverPin.length>=4) return; _driverPin+=String(k); }
+  const disp=document.getElementById('driver-pin-display');
+  disp.textContent=('●'.repeat(_driverPin.length)+'–'.repeat(4-_driverPin.length)).split('').join(' ');
+  document.getElementById('driver-pin-error').style.display='none';
+  if(_driverPin.length===4){
+    const drv=S.drivers.find(d=>d.pin===_driverPin);
+    if(drv){ _activeDriverId=drv.id; localStorage.setItem('washops_driver',drv.id); showDriverScreen(drv.id); }
+    else { document.getElementById('driver-pin-error').style.display='block'; setTimeout(()=>{_driverPin='';disp.textContent='– – – –';},1000); }
+  }
+}
+
+function showDriverScreen(driverId){
+  const drv=S.drivers.find(d=>d.id===driverId); if(!drv) return;
+  document.getElementById('driver-pin-screen').style.display='none';
+  document.getElementById('driver-app-screen').style.display='block';
+  document.getElementById('driver-app-name').textContent='🚚 '+drv.name;
   document.getElementById('driver-date').value=todayStr();
   renderDriverApp();
 }
+
+function driverLogout(){
+  _activeDriverId=null; _driverPin='';
+  localStorage.removeItem('washops_driver');
+  document.getElementById('driver-pin-screen').style.display='block';
+  document.getElementById('driver-app-screen').style.display='none';
+  document.getElementById('driver-pin-display').textContent='– – – –';
+  document.getElementById('driver-pin-error').style.display='none';
+}
+
 function renderDriverApp(){
-  const did=document.getElementById('driver-sel').value;
+  const did=_activeDriverId;
   const date=document.getElementById('driver-date')?.value||todayStr();
   const list=document.getElementById('driver-app-list');
-  if(!did){list.innerHTML='<div class="empty">Select a driver above</div>';return;}
+  if(!list) return;
+  if(!did){list.innerHTML='<div class="empty">Please login</div>';return;}
   const drv=S.drivers.find(d=>d.id===did);
+  const dateLabel=document.getElementById('driver-app-date-label');
+  if(dateLabel) dateLabel.textContent=fmtFull(date);
 
-  // Match orders by driverId OR dayDrivers for the selected date
-  const dow = new Date(date+'T00:00:00').getDay();
+  const dow=new Date(date+'T00:00:00').getDay();
   const orders=S.orders.filter(o=>{
     if(o.deliveryDate!==date) return false;
-    if(o.status==='delivered') return true; // always show delivered
-    if(o.status!=='packed'&&o.status!=='pending') return false;
-    // Check primary driverId
-    if(o.driverId===did) return true;
-    // Check dayDrivers for this delivery date
+    if(o.status!=='packed'&&o.status!=='pending'&&o.status!=='delivered') return false;
     const c=S.customers.find(x=>x.id===o.customerId);
+    // Check dayDrivers per-day assignment first
     if(c&&c.dayDrivers&&c.dayDrivers.length){
-      return c.dayDrivers.some(dd=>dd.driverId===did&&dd.day===dow);
+      const dd=c.dayDrivers.find(x=>x.day===dow);
+      if(dd) return dd.driverId===did;
     }
-    return false;
-  }).sort((a,b)=>(a.routeOrder||99)-(b.routeOrder||99));
+    // Fall back to primary driverId
+    return o.driverId===did;
+  }).sort((a,b)=>{
+    const ca=S.customers.find(x=>x.id===a.customerId);
+    const cb=S.customers.find(x=>x.id===b.customerId);
+    const ra=ca?.dayDrivers?.find(x=>x.day===dow)?.routeOrder??ca?.routeOrder??99;
+    const rb=cb?.dayDrivers?.find(x=>x.day===dow)?.routeOrder??cb?.routeOrder??99;
+    return ra-rb;
+  });
 
-  if(!orders.length){list.innerHTML=`<div class="empty">No deliveries for ${drv?.name} on ${fmtD(date)}.</div>`;return;}
+  if(!orders.length){list.innerHTML=`<div style="text-align:center;padding:40px;color:#9ca3af;font-size:15px">No deliveries for ${drv?.name}<br>on ${fmtD(date)}</div>`;return;}
   list.innerHTML=orders.map(o=>`
-    <div class="driver-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div><div style="font-weight:800;font-size:18px">${o.customerName}</div><div style="font-size:13px;color:var(--muted);margin-top:3px">📦 ${o.bagCount} bag${o.bagCount>1?'s':''}</div></div>
-        <span class="badge ${o.status==='delivered'?'bg-green':o.status==='packed'?'bg-warn':'bg-gray'}" style="font-size:13px">${o.status.toUpperCase()}</span>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px">
+        <div style="font-weight:800;font-size:19px;line-height:1.2">${o.customerName}</div>
+        <span style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap;
+          background:${o.status==='delivered'?'#dcfce7':o.status==='packed'?'#fef9c3':'#f3f4f6'};
+          color:${o.status==='delivered'?'#16a34a':o.status==='packed'?'#854d0e':'#6b7280'}">
+          ${o.status.toUpperCase()}
+        </span>
       </div>
-      <div>${o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px"><span>${it.productName}</span><span class="badge bg-blue" style="font-size:13px">${it.qty}</span></div>`).join('')}</div>
-      ${o.status==='packed'?`<button class="btn btn-primary w-full" style="height:50px;font-size:15px;margin-top:14px" onclick="confirmDelivery('${o.id}')">✓ Mark Delivered</button>`:''}
+      <div style="font-size:13px;color:#9ca3af;margin-bottom:10px">📦 ${o.bagCount} bag${o.bagCount>1?'s':''}</div>
+      <div style="border-top:1px solid #f3f4f6;padding-top:8px">
+        ${o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f9fafb;font-size:15px"><span>${it.productName}</span><span style="font-weight:700">${it.qty}</span></div>`).join('')}
+      </div>
+      ${o.status==='packed'?`<button onclick="confirmDelivery('${o.id}')"
+        style="width:100%;margin-top:16px;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer">
+        ✓ Mark Delivered</button>`:''}
     </div>`).join('');
 }
 
@@ -2518,7 +2592,9 @@ function renderAdmin(){
       <span style="font-size:20px">🚗</span>
       <div class="ali-name">${d.name}</div>
       <div class="ali-meta">${d.vehicle}</div>
-      <div class="ali-meta">${S.customers.filter(c=>c.driverId===d.id).length} customers</div>
+      <div class="ali-meta">${S.customers.filter(c=>c.driverId===d.id).length} customers · PIN: <strong>${d.pin||'not set'}</strong></div>
+      <input placeholder="Set PIN" maxlength="4" type="number" style="width:80px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px" 
+        onchange="setDriverPin('${d.id}',this.value)">
       <button class="btn btn-xs btn-danger" onclick="event.stopPropagation();removeDriver('${d.id}')">Remove</button>
     </div>`).join('')||'<div class="empty">No drivers</div>';
   // Categories
@@ -2806,7 +2882,7 @@ async function loadFromDB() {
       email:c.email||'', phone:c.phone||'',
       notes:c.notes||'', active:c.active!==0, driverId:c.driver_id||null, routeOrder:c.route_order||99
     }));
-    S.drivers     = drvs.map(d => ({id:d.id, name:d.name, vehicle:d.vehicle||''}));
+    S.drivers     = drvs.map(d => ({id:d.id, name:d.name, vehicle:d.vehicle||'', pin:d.pin||''}));
     S.categories  = cats.map(c => ({id:c.id, name:c.name, type:c.type||'linen'}));
     S.products    = prods.map(p => ({id:p.id, name:p.name, catId:p.cat_id, trackStock:p.track_stock !== false}));
 
@@ -3012,11 +3088,26 @@ addCustomer = async function() {
 const _origAddDriver = addDriver;
 addDriver = async function() {
   const n = document.getElementById('nd-name').value.trim(); if (!n) return alert('Enter name.');
-  const drv = {id:uid(),name:n,vehicle:document.getElementById('nd-vehicle').value.trim()};
-  try { await _post('drivers',[drv]); } catch(e) { return alert('DB error: '+e.message); }
+  const pin = document.getElementById('nd-pin')?.value?.trim()||'';
+  const drv = {id:uid(),name:n,vehicle:document.getElementById('nd-vehicle').value.trim(),pin};
+  try { await _post('drivers',[{id:drv.id,name:drv.name,vehicle:drv.vehicle,pin:drv.pin}]); } catch(e) { return alert('DB error: '+e.message); }
   S.drivers.push(drv);
-  document.getElementById('nd-name').value=''; document.getElementById('nd-vehicle').value='';
+  document.getElementById('nd-name').value='';
+  document.getElementById('nd-vehicle').value='';
+  if(document.getElementById('nd-pin')) document.getElementById('nd-pin').value='';
   renderAdmin(); _toast('✓ Driver added', 2000);
+};
+
+async function setDriverPin(driverId, pin){
+  pin=String(pin).trim();
+  if(pin.length!==4||isNaN(pin)) return _toast('PIN must be 4 digits',2000);
+  const d=S.drivers.find(x=>x.id===driverId); if(!d) return;
+  // Check uniqueness
+  if(S.drivers.some(x=>x.id!==driverId&&x.pin===pin)) return _toast('PIN already used by another driver',2500);
+  d.pin=pin;
+  try { await _patch('drivers',{pin},'?id=eq.'+driverId); _toast('✓ PIN saved',2000); }
+  catch(e){ _toast('Error: '+e.message,2500); }
+  renderAdmin();
 };
 
 const _origAddCategory = addCategory;
