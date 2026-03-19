@@ -1485,11 +1485,25 @@ function renderRecvLog(){
   document.getElementById('recv-log-cnt').textContent=entries.length+' entries';
 }
 function updateProdSummary(){
-  const tot={},rem={};
-  S.orders.forEach(o=>o.items.forEach(it=>{tot[it.productName]=(tot[it.productName]||0)+it.qty;if(o.status==='pending')rem[it.productName]=(rem[it.productName]||0)+it.qty;}));
+  const tot={},rem={},prodInfo={};
+  S.orders.forEach(o=>o.items.forEach(it=>{
+    tot[it.productName]=(tot[it.productName]||0)+it.qty;
+    if(o.status==='pending')rem[it.productName]=(rem[it.productName]||0)+it.qty;
+    if(!prodInfo[it.productName])prodInfo[it.productName]=prodType(it.productId);
+  }));
   const keys=Object.keys(tot);const g=document.getElementById('prod-grid');
   if(!keys.length){g.innerHTML='<div style="font-size:12px;color:var(--muted)">Receive items to see targets</div>';return;}
-  g.innerHTML=keys.map(k=>`<div class="ps-item ${(rem[k]||0)===0?'done':''}"><div class="ps-label">${k}</div><div class="ps-val">${rem[k]||0}</div><div class="ps-sub">of ${tot[k]} · ${tot[k]-(rem[k]||0)} done</div></div>`).join('');
+  g.innerHTML=keys.map(k=>{
+    const r=rem[k]||0;
+    const type=prodInfo[k]||'linen';
+    const borderColor=type==='towel'?'#3b82f6':'#16a34a';
+    const bgColor=r===0?(type==='towel'?'#eff6ff':'#f0fdf4'):'#fff';
+    return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor};${r===0?'opacity:0.7':''}">
+      <div class="ps-label">${k}</div>
+      <div class="ps-val" style="color:${borderColor}">${r}</div>
+      <div class="ps-sub">of ${tot[k]} · ${tot[k]-r} done</div>
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -1634,21 +1648,24 @@ function toggleChip(oid,pid,type,el){
 }
 
 function renderOrderProdSummary(orders){
-  const tot={};
+  const tot={}, done={}, prodInfo={};
   // Count total quantities for the day
   orders.forEach(o=>o.items.forEach(it=>{
     tot[it.productName]=(tot[it.productName]||0)+it.qty;
+    if(!prodInfo[it.productName]) prodInfo[it.productName]=prodType(it.productId);
   }));
-  // Count checked (done) quantities — chip ticked = done
-  const done={};
+  // Count done quantities:
+  // - If order is packed/delivered → all items count as done (whether chips ticked or not)
+  // - If order is pending → only ticked chips count as done
   orders.forEach(o=>{
-    if(!o.checkedItems)return;
     o.items.forEach(it=>{
-      // check both linen and towel type keys
-      const ckL=o.checkedItems[it.productId+'linen'];
-      const ckT=o.checkedItems[it.productId+'towel'];
-      const ckB=o.checkedItems[it.productId+'both'];
-      if(ckL||ckT||ckB) done[it.productName]=(done[it.productName]||0)+it.qty;
+      if(o.status==='packed'||o.status==='delivered'){
+        // All items done regardless of chip state
+        done[it.productName]=(done[it.productName]||0)+it.qty;
+      } else if(o.checkedItems){
+        const ck=o.checkedItems[it.productId+'linen']||o.checkedItems[it.productId+'towel']||o.checkedItems[it.productId+'both'];
+        if(ck) done[it.productName]=(done[it.productName]||0)+it.qty;
+      }
     });
   });
   const keys=Object.keys(tot);
@@ -1657,7 +1674,14 @@ function renderOrderProdSummary(orders){
   g.innerHTML=keys.map(k=>{
     const d=done[k]||0;
     const rem=Math.max(0,tot[k]-d);
-    return`<div class="ps-item ${rem===0?'done':''}"><div class="ps-label">${k}</div><div class="ps-val" id="psum-${k.replace(/\s+/g,'_')}">${rem}</div><div class="ps-sub">of ${tot[k]} · ${d} done</div></div>`;
+    const type=prodInfo[k]||'linen';
+    const borderColor=type==='towel'?'#3b82f6':'#16a34a';
+    const bgColor=rem===0?(type==='towel'?'#eff6ff':'#f0fdf4'):'#fff';
+    return`<div class="ps-item" style="border:2px solid ${borderColor};background:${bgColor};${rem===0?'opacity:0.7':''}">
+      <div class="ps-label">${k}</div>
+      <div class="ps-val" style="color:${borderColor}">${rem}</div>
+      <div class="ps-sub">of ${tot[k]} · ${d} done</div>
+    </div>`;
   }).join('');
 }
 
