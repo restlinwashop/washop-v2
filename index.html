@@ -102,7 +102,7 @@ tr:hover td{background:#f9fafb;}
 
 /* ── RECEIVING ── */
 .cust-search-wrap{position:relative;}
-.cust-dropdown{position:absolute;z-index:200;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;overflow-y:auto;max-height:320px;box-shadow:0 8px 30px rgba(0,0,0,.12);top:calc(100% + 4px);}
+.cust-dropdown{position:absolute;z-index:200;width:100%;background:#fff;border:1px solid var(--border);border-radius:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;max-height:320px;box-shadow:0 8px 30px rgba(0,0,0,.12);top:calc(100% + 4px);}
 .cust-dd-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .1s;}
 .cust-dd-item:last-child{border-bottom:none;}
 .cust-dd-item:hover{background:var(--surface2);}
@@ -1279,7 +1279,7 @@ function filterCusts(q){
     return an.localeCompare(bn);
   });
   if(!matches.length){dd.innerHTML='<div class="cust-dd-item"><div class="cust-dd-name" style="color:var(--muted)">No results</div></div>';dd.style.display='block';return;}
-  dd.innerHTML=matches.map(c=>`<div class="cust-dd-item" onmousedown="selectRecvCust('${c.id}')"><div class="cust-dd-name">${c.name}</div><div class="cust-dd-meta">${c.frequency} · ${c.address}</div></div>`).join('');
+  dd.innerHTML=matches.map(c=>`<div class="cust-dd-item" onmousedown="selectRecvCust('${c.id}')" ontouchend="event.preventDefault();selectRecvCust('${c.id}')"><div class="cust-dd-name">${c.name}</div><div class="cust-dd-meta">${c.frequency} · ${c.address}</div></div>`).join('');
   dd.style.display='block';
 }
 async function selectRecvCust(id){
