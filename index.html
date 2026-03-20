@@ -1297,14 +1297,18 @@ function nextDeliveryDate(cust, fromDate) {
 
 // FIX: "not due" — check delivery date vs customer's scheduled pattern, NOT current date
 function isCustomerDueOnDate(cust, dateStr){
-  // If there's an override, only due on that specific date
   if(cust.nextDeliveryOverride) return dateStr === cust.nextDeliveryOverride;
   const d=new Date(dateStr+'T00:00:00');
   const wd=d.getDay();
-  if(cust.frequency==='Daily')return true;
-  if(cust.frequency==='3x Week')return [1,3,5].includes(wd);
-  if(cust.frequency==='2x Week')return [1,4].includes(wd);
-  // Weekly/Fortnightly/Monthly — check if the delivery date's weekday matches dueDay
+  if(cust.frequency==='Daily') return true;
+  // If customer has explicit deliveryDays array, always use it
+  if(cust.deliveryDays && cust.deliveryDays.length){
+    return cust.deliveryDays.includes(wd)||cust.deliveryDays.includes(String(wd));
+  }
+  // Fall back to frequency-based defaults only if no deliveryDays set
+  if(cust.frequency==='3x Week') return [1,3,5].includes(wd);
+  if(cust.frequency==='2x Week') return [1,4].includes(wd);
+  // Weekly/Fortnightly/Monthly — check weekday matches dueDay
   return wd===parseInt(cust.dueDay||4);
 }
 
