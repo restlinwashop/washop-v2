@@ -1326,15 +1326,7 @@ function showPage(id){
   if(id==='rejects')initRejectsPage();
   if(id==='dashboard')renderDashboard();
   if(id==='admin')renderAdmin();
-  if(id==='pricing'){ 
-    // Reload cust_products fresh from DB before rendering pricing
-    _get('cust_products','?select=*&limit=10000').then(rows=>{
-      custProds={};
-      rows.forEach(r=>{ if(!custProds[r.cust_id])custProds[r.cust_id]=new Set(); custProds[r.cust_id].add(r.product_id); });
-      renderPricing();
-    }).catch(()=>renderPricing());
-    return;
-  }
+  if(id==='pricing')renderPricing();
   if(id==='receiving'){updateProdSummary();updateDispSummary();}
 }
 document.getElementById('topbar-date').textContent=fmtFull(todayStr());
@@ -5638,8 +5630,7 @@ ensureDeliveryDaysColumn();
           { event: '*', schema: 'public', table: 'orders' },
           { event: '*', schema: 'public', table: 'receiving_log' },
           { event: '*', schema: 'public', table: 'receiving_log_items' },
-          { event: '*', schema: 'public', table: 'op_transfers' },
-          { event: '*', schema: 'public', table: 'cust_products' }
+          { event: '*', schema: 'public', table: 'op_transfers' }
         ]}},
         ref: '1'
       }));
