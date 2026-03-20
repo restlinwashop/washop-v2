@@ -3077,44 +3077,69 @@ function delPkg(id){
 }
 
 function exportPricingQB(){
-  // QuickBooks IIF import format
-  const rows=[
-    ['!TRNS','TRNSTYPE','DATE','ACCNT','NAME','AMOUNT','MEMO'],
-    ['!SPL','TRNSTYPE','DATE','ACCNT','NAME','AMOUNT','MEMO'],
-    ['!ENDTRNS']
-  ];
-  const today=todayStr();
-  S.customers.filter(c=>c.active).forEach(c=>{
-    const prods=S.products.filter(p=>getCustProds(c.id).has(p.id));
-    const custPkgs=(S.packages||[]).filter(p=>p.custId===c.id);
-    let hasLines=false;
-    prods.forEach(p=>{
-      const ex=((S.custPrices||{})[c.id]||{})[p.id];
+  // QuickBooks Online Invoice Import CSV format
+  const today = todayStr();
+  const rows = [];
+
+  // Header row — QB Online import format
+  rows.push([
+    'InvoiceNo','Customer','InvoiceDate','DueDate',
+    'Item(Product/Service)','ItemDescription','ItemQuantity','ItemRate',
+    'ItemAmount','ItemTaxCode','ItemTaxAmount','Currency'
+  ]);
+
+  let invNum = 1;
+  S.customers.filter(c => c.active).forEach(c => {
+    const prods = S.products.filter(p => getCustProds(c.id).has(p.id));
+    const custPkgs = (S.packages||[]).filter(p => p.custId === c.id);
+    const lines = [];
+
+    prods.forEach(p => {
+      const ex = ((S.custPrices||{})[c.id]||{})[p.id];
       if(!ex) return;
-      if(!hasLines){
-        rows.push(['TRNS','INVOICE',today,'Accounts Receivable',c.name,(ex*1.1).toFixed(2),c.name+' Invoice']);
-        hasLines=true;
-      }
-      rows.push(['SPL','INVOICE',today,'Sales',c.name,(-ex).toFixed(2),p.name]);
-      rows.push(['SPL','INVOICE',today,'GST Payable',c.name,(-ex*0.1).toFixed(2),'GST on '+p.name]);
+      lines.push({name: p.name, rate: ex});
     });
-    custPkgs.forEach(pkg=>{
-      const ex=parseFloat(pkg.price)||0;
-      if(!hasLines){
-        rows.push(['TRNS','INVOICE',today,'Accounts Receivable',c.name,(ex*1.1).toFixed(2),c.name+' Invoice']);
-        hasLines=true;
-      }
-      rows.push(['SPL','INVOICE',today,'Sales',c.name,(-ex).toFixed(2),pkg.name]);
-      rows.push(['SPL','INVOICE',today,'GST Payable',c.name,(-ex*0.1).toFixed(2),'GST on '+pkg.name]);
+
+    custPkgs.forEach(pkg => {
+      const ex = parseFloat(pkg.price)||0;
+      if(!ex) return;
+      lines.push({name: pkg.name, rate: ex});
     });
-    if(hasLines) rows.push(['ENDTRNS']);
+
+    if(!lines.length) return;
+
+    const invNo = 'WO-' + today.replace(/-/g,'') + '-' + String(invNum).padStart(3,'0');
+    invNum++;
+    // Due date 14 days out
+    const dueDate = addDays(today, 14);
+
+    lines.forEach((line, i) => {
+      const gst = line.rate * 0.1;
+      rows.push([
+        i===0 ? invNo : '',           // InvoiceNo (only on first line)
+        i===0 ? c.name : '',          // Customer (only on first line)
+        i===0 ? today : '',           // InvoiceDate
+        i===0 ? dueDate : '',         // DueDate
+        line.name,                    // Item
+        line.name,                    // Description
+        '1',                          // Qty
+        line.rate.toFixed(2),         // Rate (ex-GST)
+        line.rate.toFixed(2),         // Amount
+        'GST',                        // TaxCode
+        gst.toFixed(2),               // TaxAmount
+        'AUD'                         // Currency
+      ]);
+    });
   });
-  const iif=rows.map(r=>r.join('\t')).join('\n');
-  const a=document.createElement('a');
-  a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(iif);
-  a.download='washops_qb_'+today+'.iif';
+
+  if(rows.length <= 1) return _toast('No priced customers to export', 2500);
+
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'washops_qb_invoices_' + today + '.csv';
   a.click();
-  _toast('✓ QB IIF file downloaded',2500);
+  _toast('✓ QB Online CSV downloaded — import via QB > Invoices > Import', 3500);
 }
 // ═══════════════════════════════════════════════
 // DASHBOARD (#7 breakdown)
