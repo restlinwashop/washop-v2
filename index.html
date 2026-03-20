@@ -468,10 +468,8 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
               </button>
             </div>
           </div>
-          <div class="field" style="min-width:180px;margin-bottom:0;margin-left:12px">
-            <label>Delivery Date</label>
-            <input type="date" id="recv-date">
-          </div>
+          <!-- recv-date kept hidden — used internally for delivery date calculation -->
+          <input type="date" id="recv-date" style="display:none">
         </div>
         <div id="recv-sel-bar" style="display:none" class="cust-sel-bar">
           <div style="flex:1">
@@ -814,25 +812,47 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
   <!-- PRICING (#5 per-customer, #6 keypad) -->
   <div class="page" id="page-pricing">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <div><div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">Customer Pricing</div>
-        <div style="font-size:12px;color:var(--muted)">Prices are set per customer per product. Click the price field to use keypad.</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">Customer Pricing</div>
+        <div style="font-size:12px;color:var(--muted)">Set per-customer per-product prices. All prices ex-GST. GST = 10%.</div>
       </div>
-      <select id="pr-cust-filter" onchange="renderPricing()" style="width:220px"><option value="">All customers</option></select>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="pr-cust-filter" onchange="renderPricing()" style="width:220px"><option value="">All customers</option></select>
+        <select id="pr-period" onchange="renderPricing()" style="width:140px">
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="custom">Custom</option>
+        </select>
+        <button class="btn btn-sm btn-secondary" onclick="exportPricingQB()">⇩ QB CSV</button>
+      </div>
     </div>
     <div id="pricing-list"></div>
-    <hr>
-    <div class="section-title">Package Pricing</div>
-    <div class="grid-2">
+
+    <hr style="margin:24px 0">
+
+    <!-- PACKAGE PRICING -->
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:14px">Package Pricing</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Packages are flat-fee charges. Assign to customers. Does NOT affect stock calculations.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <!-- Add package form -->
       <div class="add-form">
-        <div class="add-row">
-          <div class="field"><label>Package Name</label><input id="pkg-name"></div>
-          <div class="field" style="min-width:130px"><label>Price ($)</label>
-            <input id="pkg-price" readonly placeholder="0.00" onclick="openKP('Package Price','Enter price in cents (e.g. 250 = $2.50)',(v)=>{document.getElementById('pkg-price').value=(v/100).toFixed(2);},0,true)" style="cursor:pointer">
+        <div class="section-title">Create Package</div>
+        <div class="field"><label>Package Name</label><input id="pkg-name" placeholder="e.g. Hilton Weekly Linen Pack"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="field"><label>Price ex-GST ($)</label>
+            <input id="pkg-price" readonly placeholder="0.00" onclick="openKP('Package Price','Enter cents (250=$2.50)',(v)=>{document.getElementById('pkg-price').value=(v/100).toFixed(2);},0,true)" style="cursor:pointer">
           </div>
-          <div class="field"><label>Contents</label><textarea id="pkg-desc" rows="2"></textarea></div>
-          <button class="btn btn-primary" style="height:40px;margin-top:21px" onclick="savePackage()">Add</button>
+          <div class="field"><label>GST</label>
+            <input readonly id="pkg-gst-display" placeholder="$0.00" style="background:#f9fafb">
+          </div>
         </div>
+        <div class="field"><label>Description / Contents</label><textarea id="pkg-desc" rows="2"></textarea></div>
+        <div class="field"><label>Assign to Customer (optional)</label>
+          <select id="pkg-cust"><option value="">— Select customer —</option></select>
+        </div>
+        <button class="btn btn-primary" onclick="savePackage()">Add Package</button>
       </div>
+      <!-- Package list -->
       <div id="pkg-list"></div>
     </div>
   </div>
@@ -2896,41 +2916,206 @@ function removeProd(id){S.products=S.products.filter(p=>p.id!==id);renderAdmin()
 function renderPricing(){
   const filterCid=document.getElementById('pr-cust-filter')?.value||'';
   const sel=document.getElementById('pr-cust-filter');
-  if(sel){const prev=sel.value;sel.innerHTML='<option value="">All customers</option>'+S.customers.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');sel.value=prev;}
+  if(sel){const prev=sel.value;sel.innerHTML='<option value="">All customers</option>'+S.customers.filter(c=>c.active).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');sel.value=prev;}
+
+  // Populate package customer select
+  const pkgCust=document.getElementById('pkg-cust');
+  if(pkgCust){pkgCust.innerHTML='<option value="">— Select customer —</option>'+S.customers.filter(c=>c.active).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');}
+
+  // PKG GST live update
+  const pkgPriceEl=document.getElementById('pkg-price');
+  const pkgGstEl=document.getElementById('pkg-gst-display');
+  if(pkgPriceEl&&pkgGstEl){
+    const v=parseFloat(pkgPriceEl.value)||0;
+    pkgGstEl.value='$'+(v*0.1).toFixed(2)+' → Total $'+(v*1.1).toFixed(2);
+  }
+
   const custs=filterCid?S.customers.filter(c=>c.id===filterCid):S.customers.filter(c=>c.active);
   const pl=document.getElementById('pricing-list');
-  if(pl)pl.innerHTML=custs.map(c=>`
-    <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:12px">
-      <div style="font-weight:700;font-size:14px;margin-bottom:10px">${c.name} <span style="font-size:11px;font-weight:400;color:var(--muted)">${c.frequency}</span></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px">
-        ${(()=>{
-          const assigned=getCustProds(c.id);
-          const prods=S.products.filter(p=>assigned.has(p.id));
-          if(!prods.length) return '<div style="font-size:12px;color:var(--muted);padding:4px">No products assigned — set in Customer Card → Products tab</div>';
-          return prods.map(p=>{
-            const price=((S.custPrices||{})[c.id]||{})[p.id];
-            const cat=S.categories.find(x=>x.id===p.catId);
-            return`<div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
-              <span style="flex:1;font-size:12px;font-weight:500">${p.name}</span>
-              <span class="badge ${cat?.type==='towel'?'bg-blue':'bg-green'}" style="font-size:9px">${cat?.type||'?'}</span>
-              <input type="text" id="pr-${c.id}-${p.id}" value="${price!=null?'$'+price.toFixed(2):''}" placeholder="—" readonly onclick="openKP('${p.name}','${c.name}\nEnter price in cents (250=$2.50)',(v)=>{setCustPrice('${c.id}','${p.id}',v/100);},${price!=null?Math.round(price*100):0},true)" style="width:72px;padding:5px 7px;text-align:right;cursor:pointer;font-family:monospace,monospace;font-size:12px">
-            </div>`;
-          }).join('');
-        })()}
+  if(!pl)return;
+
+  pl.innerHTML=custs.map(c=>{
+    const assigned=getCustProds(c.id);
+    const prods=S.products.filter(p=>assigned.has(p.id));
+    // Customer packages
+    const custPkgs=(S.packages||[]).filter(p=>p.custId===c.id);
+
+    // Calculate totals
+    let totalEx=0;
+    prods.forEach(p=>{ const pr=((S.custPrices||{})[c.id]||{})[p.id]||0; totalEx+=pr; });
+    custPkgs.forEach(p=>{ totalEx+=parseFloat(p.price)||0; });
+    const totalGST=totalEx*0.1;
+    const totalInc=totalEx+totalGST;
+
+    return`<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px">${c.name}</div>
+          <div style="font-size:11px;color:var(--muted)">${c.frequency}</div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <div style="text-align:right;font-size:12px">
+            <div style="color:var(--muted)">Ex-GST</div>
+            <div style="font-weight:700;font-family:monospace">$${totalEx.toFixed(2)}</div>
+          </div>
+          <div style="text-align:right;font-size:12px">
+            <div style="color:var(--muted)">GST 10%</div>
+            <div style="font-weight:700;font-family:monospace;color:#d97706">$${totalGST.toFixed(2)}</div>
+          </div>
+          <div style="text-align:right;font-size:12px;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px">
+            <div style="color:#16a34a;font-size:10px;font-weight:700;text-transform:uppercase">Total inc GST</div>
+            <div style="font-weight:800;font-family:monospace;font-size:16px;color:#16a34a">$${totalInc.toFixed(2)}</div>
+          </div>
+        </div>
       </div>
-    </div>`).join('')||'<div class="empty">No customers</div>';
+
+      ${!prods.length?'<div style="font-size:12px;color:var(--muted);padding:4px">No products assigned</div>':''}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;margin-bottom:${custPkgs.length?'10px':'0'}">
+        ${prods.map(p=>{
+          const price=((S.custPrices||{})[c.id]||{})[p.id];
+          const cat=S.categories.find(x=>x.id===p.catId);
+          const ex=price||0;
+          const gst=ex*0.1;
+          return`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="flex:1;font-size:12px;font-weight:600">${p.name}</span>
+              <span class="badge ${cat?.type==='towel'?'bg-blue':'bg-green'}" style="font-size:9px">${cat?.type||'?'}</span>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="text" id="pr-${c.id}-${p.id}" value="${price!=null?'$'+price.toFixed(2):''}" placeholder="Set price" readonly
+                onclick="openKP('${p.name} — ${c.name}','Enter price in cents (250=$2.50)',(v)=>{setCustPrice('${c.id}','${p.id}',v/100);},${price!=null?Math.round(price*100):0},true)"
+                style="width:72px;padding:5px 7px;text-align:right;cursor:pointer;font-family:monospace;font-size:12px;border:1px solid var(--border);border-radius:5px">
+              ${price!=null?`<span style="font-size:10px;color:var(--muted)">+GST $${gst.toFixed(2)}</span>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      ${custPkgs.length?`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Packages</div>
+        ${custPkgs.map(pkg=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;margin-bottom:4px">
+          <div><div style="font-size:12px;font-weight:600;color:#1d4ed8">${pkg.name}</div>
+          <div style="font-size:11px;color:#6b7280">${pkg.description||''}</div></div>
+          <div style="text-align:right;font-size:12px">
+            <div style="font-weight:700;font-family:monospace">$${parseFloat(pkg.price).toFixed(2)}</div>
+            <div style="color:var(--muted)">+GST $${(parseFloat(pkg.price)*0.1).toFixed(2)}</div>
+          </div>
+          <button class="btn btn-xs btn-danger" style="margin-left:8px" onclick="unassignPkg('${pkg.id}','${c.id}')">✕</button>
+        </div>`).join('')}
+      </div>`:''}
+    </div>`;
+  }).join('')||'<div class="empty">No customers</div>';
+
+  // Package list
   const pkl=document.getElementById('pkg-list');
-  if(pkl)pkl.innerHTML=S.packages.map(p=>`<div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:11px 14px;margin-bottom:8px"><div style="flex:1"><div style="font-weight:700;font-size:13px">${p.name}</div><div style="font-size:11px;color:var(--muted)">$${p.price} · ${p.description}</div></div><button class="btn btn-xs btn-danger" onclick="delPkg('${p.id}')">Remove</button></div>`).join('')||'<div style="color:var(--muted);font-size:13px;padding:12px 0">No packages</div>';
+  if(pkl)pkl.innerHTML=(S.packages||[]).map(p=>{
+    const assignedCust=p.custId?S.customers.find(c=>c.id===p.custId):null;
+    const ex=parseFloat(p.price)||0;
+    return`<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:13px">${p.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.description||''}</div>
+          ${assignedCust?`<div style="font-size:11px;color:#1d4ed8;margin-top:4px">👤 ${assignedCust.name}</div>`:'<div style="font-size:11px;color:var(--muted);margin-top:4px">Not assigned</div>'}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-weight:700;font-family:monospace;font-size:13px">$${ex.toFixed(2)}</div>
+          <div style="font-size:10px;color:var(--muted)">+GST $${(ex*0.1).toFixed(2)}</div>
+          <div style="font-size:10px;font-weight:700;color:#16a34a">=$${(ex*1.1).toFixed(2)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <select onchange="assignPkg('${p.id}',this.value)" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--border);border-radius:5px">
+          <option value="">Assign to customer...</option>
+          ${S.customers.filter(c=>c.active).map(c=>`<option value="${c.id}" ${p.custId===c.id?'selected':''}>${c.name}</option>`).join('')}
+        </select>
+        <button class="btn btn-xs btn-danger" onclick="delPkg('${p.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('')||'<div style="color:var(--muted);font-size:13px;padding:12px 0">No packages yet</div>';
 }
+
+function assignPkg(pkgId, custId){
+  const p=S.packages.find(x=>x.id===pkgId); if(!p) return;
+  p.custId=custId||null;
+  // Save to DB
+  _patch('packages',{cust_id:custId||null},'?id=eq.'+pkgId).catch(()=>{});
+  renderPricing();
+}
+
+function unassignPkg(pkgId, custId){
+  assignPkg(pkgId, null);
+}
+
 function setCustPrice(cid,pid,price){
   if(!S.custPrices)S.custPrices={};
   if(!S.custPrices[cid])S.custPrices[cid]={};
   S.custPrices[cid][pid]=price;
   const el=document.getElementById('pr-'+cid+'-'+pid);
   if(el)el.value='$'+price.toFixed(2);
+  renderPricing();
 }
-function savePackage(){const n=document.getElementById('pkg-name').value.trim();const pp=document.getElementById('pkg-price').value;const p=parseFloat(pp);if(!n||isNaN(p)||p<=0)return alert('Enter name and price.');S.packages.push({id:uid(),name:n,price:p,description:document.getElementById('pkg-desc').value});['pkg-name','pkg-price','pkg-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderPricing();}
-function delPkg(id){S.packages=S.packages.filter(p=>p.id!==id);renderPricing();}
+
+function savePackage(){
+  const n=document.getElementById('pkg-name').value.trim();
+  const pp=document.getElementById('pkg-price').value;
+  const p=parseFloat(pp);
+  if(!n||isNaN(p)||p<=0)return alert('Enter name and price.');
+  const custId=document.getElementById('pkg-cust')?.value||null;
+  const pkg={id:uid(),name:n,price:p,description:document.getElementById('pkg-desc').value,custId:custId||null};
+  S.packages.push(pkg);
+  ['pkg-name','pkg-price','pkg-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(document.getElementById('pkg-cust'))document.getElementById('pkg-cust').value='';
+  renderPricing();
+}
+
+function delPkg(id){
+  if(!confirm('Delete this package?')) return;
+  S.packages=S.packages.filter(p=>p.id!==id);
+  _del('packages','?id=eq.'+id).catch(()=>{});
+  renderPricing();
+}
+
+function exportPricingQB(){
+  // QuickBooks IIF import format
+  const rows=[
+    ['!TRNS','TRNSTYPE','DATE','ACCNT','NAME','AMOUNT','MEMO'],
+    ['!SPL','TRNSTYPE','DATE','ACCNT','NAME','AMOUNT','MEMO'],
+    ['!ENDTRNS']
+  ];
+  const today=todayStr();
+  S.customers.filter(c=>c.active).forEach(c=>{
+    const prods=S.products.filter(p=>getCustProds(c.id).has(p.id));
+    const custPkgs=(S.packages||[]).filter(p=>p.custId===c.id);
+    let hasLines=false;
+    prods.forEach(p=>{
+      const ex=((S.custPrices||{})[c.id]||{})[p.id];
+      if(!ex) return;
+      if(!hasLines){
+        rows.push(['TRNS','INVOICE',today,'Accounts Receivable',c.name,(ex*1.1).toFixed(2),c.name+' Invoice']);
+        hasLines=true;
+      }
+      rows.push(['SPL','INVOICE',today,'Sales',c.name,(-ex).toFixed(2),p.name]);
+      rows.push(['SPL','INVOICE',today,'GST Payable',c.name,(-ex*0.1).toFixed(2),'GST on '+p.name]);
+    });
+    custPkgs.forEach(pkg=>{
+      const ex=parseFloat(pkg.price)||0;
+      if(!hasLines){
+        rows.push(['TRNS','INVOICE',today,'Accounts Receivable',c.name,(ex*1.1).toFixed(2),c.name+' Invoice']);
+        hasLines=true;
+      }
+      rows.push(['SPL','INVOICE',today,'Sales',c.name,(-ex).toFixed(2),pkg.name]);
+      rows.push(['SPL','INVOICE',today,'GST Payable',c.name,(-ex*0.1).toFixed(2),'GST on '+pkg.name]);
+    });
+    if(hasLines) rows.push(['ENDTRNS']);
+  });
+  const iif=rows.map(r=>r.join('\t')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/plain;charset=utf-8,'+encodeURIComponent(iif);
+  a.download='washops_qb_'+today+'.iif';
+  a.click();
+  _toast('✓ QB IIF file downloaded',2500);
+}
 // ═══════════════════════════════════════════════
 // DASHBOARD (#7 breakdown)
 // ═══════════════════════════════════════════════
@@ -3183,7 +3368,7 @@ async function loadFromDB() {
 
     S.custPrices = {};
     prices.forEach(p => { if (!S.custPrices[p.cust_id]) S.custPrices[p.cust_id]={}; S.custPrices[p.cust_id][p.product_id]=parseFloat(p.price); });
-    S.packages = pkgs.map(p => ({id:p.id, name:p.name, price:parseFloat(p.price), description:p.description||''}));
+    S.packages = pkgs.map(p => ({id:p.id, name:p.name, price:parseFloat(p.price), description:p.description||'', custId:p.cust_id||null}));
 
     _toast('✓ Connected — data loaded', 2500);
     _syncBadge(true);
@@ -3586,12 +3771,17 @@ setCustPrice = async function(cid, pid, price) {
 // savePackage
 const _origSavePackage = savePackage;
 savePackage = async function() {
-  const n = document.getElementById('pkg-name').value.trim(); const pp = document.getElementById('pkg-price').value; const p = parseFloat(pp);
+  const n = document.getElementById('pkg-name').value.trim();
+  const pp = document.getElementById('pkg-price').value;
+  const p = parseFloat(pp);
   if (!n||isNaN(p)||p<=0) return alert('Enter name and price.');
-  const pkg = {id:uid(),name:n,price:p,description:document.getElementById('pkg-desc').value};
-  try { await _post('packages',[pkg]); } catch(e) { return alert('DB error: '+e.message); }
+  const custId = document.getElementById('pkg-cust')?.value||null;
+  const pkg = {id:uid(),name:n,price:p,description:document.getElementById('pkg-desc').value,custId:custId||null};
+  try { await _post('packages',[{id:pkg.id,name:pkg.name,price:pkg.price,description:pkg.description,cust_id:custId||null}]); }
+  catch(e) { return alert('DB error: '+e.message); }
   S.packages.push(pkg);
   ['pkg-name','pkg-price','pkg-desc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  if(document.getElementById('pkg-cust')) document.getElementById('pkg-cust').value='';
   renderPricing(); _toast('✓ Package saved', 2000);
 };
 
