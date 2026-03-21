@@ -2180,12 +2180,30 @@ function openEO(id){
 }
 function adjEO(pid,d){const o=S.orders.find(x=>x.id===eoId);if(!o)return;const it=o.items.find(x=>x.productId===pid);if(!it)return;it.qty=Math.max(0,it.qty+d);const el=document.getElementById('eoq-'+pid);if(el)el.textContent=it.qty;}
 function setEOqty(pid,v){const o=S.orders.find(x=>x.id===eoId);if(!o)return;const it=o.items.find(x=>x.productId===pid);if(it)it.qty=v;const el=document.getElementById('eoq-'+pid);if(el)el.textContent=v;}
-function removeEOitem(pid){const o=S.orders.find(x=>x.id===eoId);if(!o)return;o.items=o.items.filter(x=>x.productId!==pid);openEO(eoId);}
-function addEOitem(pid,pname,catId){
-  const o=S.orders.find(x=>x.id===eoId);if(!o)return;
-  if(o.items.some(x=>x.productId===pid))return;
+async function removeEOitem(pid){
+  const o=S.orders.find(x=>x.id===eoId); if(!o) return;
+  const it=o.items.find(x=>x.productId===pid); if(!it) return;
+  // Remove from local
+  o.items=o.items.filter(x=>x.productId!==pid);
+  // Remove from DB — find by order_id + product_id
+  try {
+    await _del('order_items','?order_id=eq.'+eoId+'&product_id=eq.'+pid);
+    _toast('✓ Removed',1500);
+  } catch(e){ _toast('⚠ '+e.message.slice(0,50),3000); }
+  openEO(eoId);
+}
+
+async function addEOitem(pid,pname,catId){
+  const o=S.orders.find(x=>x.id===eoId); if(!o) return;
+  if(o.items.some(x=>x.productId===pid)) return;
   openKP(pname,'Enter quantity',(v)=>{
-    if(v>0){o.items.push({productId:pid,productName:pname,catId:catId||'',qty:v});}
+    if(v<=0){ openEO(eoId); return; }
+    const newItem={productId:pid,productName:pname,catId:catId||'',qty:v};
+    o.items.push(newItem);
+    // Save to DB immediately
+    _post('order_items',[{id:uid(),order_id:eoId,product_id:pid,product_name:pname,cat_id:catId||'',qty:v}])
+      .then(()=>_toast('✓ Added',1500))
+      .catch(e=>_toast('⚠ '+e.message.slice(0,50),3000));
     openEO(eoId);
   },0);
 }
