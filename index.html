@@ -1347,16 +1347,19 @@ function showPage(id){
   document.getElementById('page-'+id).classList.add('active');
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')===`showPage('${id}')`)n.classList.add('active');});
   document.getElementById('page-title').textContent=PAGE_TITLES[id]||id;
-  if(id==='order')initOrder();
-  if(id==='dispatch'){renderDispatch();updateDispSummary();}
-  if(id==='driver')initDriverApp();
+  if(id==='order'){
+    _freshOrders().then(()=>{ _freshCustProds().then(()=>{ autoCreateFixedOrders(); initOrder(); }); });
+    return;
+  }
+  if(id==='dispatch'){ _freshOrders().then(()=>{ renderDispatch(); updateDispSummary(); }); return; }
+  if(id==='receiving'){ _freshCustomers().then(()=>{ _freshCustProds().then(()=>{ updateProdSummary(); updateDispSummary(); }); }); return; }
+  if(id==='pricing'){ _freshCustProds().then(()=>renderPricing()); return; }
+  if(id==='driver') initDriverApp();
   if(id==='history')initHistory();
   if(id==='stock')renderStockTable();
   if(id==='rejects')initRejectsPage();
   if(id==='dashboard')renderDashboard();
   if(id==='admin')renderAdmin();
-  if(id==='pricing')renderPricing();
-  if(id==='receiving'){updateProdSummary();updateDispSummary();}
 }
 document.getElementById('topbar-date').textContent=fmtFull(todayStr());
 const _dashDateEl = document.getElementById('dash-date');
@@ -2129,28 +2132,63 @@ function toggleMOPUO(){
   const sec=document.getElementById('mo-items-section');
   if(sec) sec.style.display=isPUO?'none':'block';
 }
+function _renderEOItems(o){
+  const assigned=getCustProds(o.customerId);
+  const missingProds=S.products.filter(p=>assigned.has(p.id)&&!o.items.some(it=>it.productId===p.id));
+  document.getElementById('eo-items').innerHTML=
+    o.items.map(it=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="flex:1;font-size:13px;font-weight:500">${it.productName}</span>
+        <span class="badge bg-${catType(it.catId)==='towel'?'blue':'green'}" style="font-size:10px">${catType(it.catId)}</span>
+        <button class="qty-btn" onclick="adjEO('${it.productId}',-1)">−</button>
+        <div class="qty-display" id="eoq-${it.productId}" style="width:70px;font-size:18px;cursor:pointer" onclick="openKP('${it.productName}','Edit qty',(v)=>{setEOqty('${it.productId}',v);},${it.qty})">${it.qty}</div>
+        <button class="qty-btn" onclick="adjEO('${it.productId}',1)">+</button>
+        <button class="btn btn-xs btn-danger" onclick="removeEOitem('${it.productId}')">Remove</button>
+      </div>`).join('')+
+    (missingProds.length?`
+      <div style="margin-top:12px;padding-top:10px;border-top:2px dashed #fca5a5">
+        <div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">⚠ Not in order — tap to add</div>
+        ${missingProds.map(p=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #fee2e2">
+            <span style="flex:1;font-size:13px;font-weight:500;color:#dc2626">${p.name}</span>
+            <span class="badge bg-${catType(p.catId)==='towel'?'blue':'green'}" style="font-size:10px">${catType(p.catId)}</span>
+            <button class="qty-btn" onclick="addEOitem('${p.id}','${p.name}','${p.catId}')">＋ Add</button>
+          </div>`).join('')}
+      </div>`:'');
+}
+
 function openEO(id){
-  eoId=id;const o=S.orders.find(x=>x.id===id);if(!o)return;
+  eoId=id;
+  const o=S.orders.find(x=>x.id===id); if(!o) return;
   document.getElementById('eo-title').textContent='Edit Order — '+o.customerName;
   document.getElementById('eo-sub').textContent=fmtD(o.deliveryDate)+' · '+o.status.toUpperCase();
   document.getElementById('eo-date').value=o.deliveryDate;
   document.getElementById('eo-note').value=o.note||'';
   const delBtn=document.getElementById('eo-delete-btn');
-  if(delBtn)delBtn.style.display=o.status==='delivered'?'none':'inline-flex';
-  document.getElementById('eo-items').innerHTML=o.items.map(it=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <span style="flex:1;font-size:13px;font-weight:500">${it.productName}</span>
-      <span class="badge bg-${catType(it.catId)==='towel'?'blue':'green'}" style="font-size:10px">${catType(it.catId)}</span>
-      <button class="qty-btn" onclick="adjEO('${it.productId}',-1)">−</button>
-      <div class="qty-display" id="eoq-${it.productId}" style="width:70px;font-size:18px;cursor:pointer" onclick="openKP('${it.productName}','Edit qty',(v)=>{setEOqty('${it.productId}',v);},${it.qty})">${it.qty}</div>
-      <button class="qty-btn" onclick="adjEO('${it.productId}',1)">+</button>
-      <button class="btn btn-xs btn-danger" onclick="removeEOitem('${it.productId}')">Remove</button>
-    </div>`).join('');
+  if(delBtn) delBtn.style.display=o.status==='delivered'?'none':'inline-flex';
+  document.getElementById('eo-items').innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Loading…</div>';
   document.getElementById('eo-modal').classList.add('open');
+  // Fresh load from DB
+  _get('order_items','?order_id=eq.'+id+'&select=*').then(dbItems=>{
+    o.items=dbItems.map(i=>({id:i.id,productId:i.product_id,productName:i.product_name,catId:i.cat_id||'',qty:i.qty}));
+    // Also fresh load custProds for this customer
+    return _get('cust_products','?cust_id=eq.'+o.customerId+'&select=product_id').then(cp=>{
+      custProds[o.customerId]=new Set(cp.map(r=>r.product_id));
+      _renderEOItems(o);
+    });
+  }).catch(()=>_renderEOItems(o));
 }
 function adjEO(pid,d){const o=S.orders.find(x=>x.id===eoId);if(!o)return;const it=o.items.find(x=>x.productId===pid);if(!it)return;it.qty=Math.max(0,it.qty+d);const el=document.getElementById('eoq-'+pid);if(el)el.textContent=it.qty;}
 function setEOqty(pid,v){const o=S.orders.find(x=>x.id===eoId);if(!o)return;const it=o.items.find(x=>x.productId===pid);if(it)it.qty=v;const el=document.getElementById('eoq-'+pid);if(el)el.textContent=v;}
 function removeEOitem(pid){const o=S.orders.find(x=>x.id===eoId);if(!o)return;o.items=o.items.filter(x=>x.productId!==pid);openEO(eoId);}
+function addEOitem(pid,pname,catId){
+  const o=S.orders.find(x=>x.id===eoId);if(!o)return;
+  if(o.items.some(x=>x.productId===pid))return;
+  openKP(pname,'Enter quantity',(v)=>{
+    if(v>0){o.items.push({productId:pid,productName:pname,catId:catId||'',qty:v});}
+    openEO(eoId);
+  },0);
+}
 function saveEO(){
   const o=S.orders.find(x=>x.id===eoId);if(!o)return;
   o.deliveryDate=document.getElementById('eo-date').value;
@@ -3520,6 +3558,57 @@ function _syncBadge(ok) {
   if (el) { el.textContent = ok ? '● Live' : '● Offline'; el.style.color = ok ? '#16a34a' : '#dc2626'; }
 }
 
+// ── FRESH RELOAD HELPERS ──────────────────────────
+// Call these instead of relying on cached S.* state
+
+async function _freshOrders() {
+  try {
+    const [orders, ois] = await Promise.all([
+      _get('orders','?select=*&order=delivery_date.desc,route_order.asc&limit=10000'),
+      _get('order_items','?select=*&limit=10000')
+    ]);
+    const imap={};
+    ois.forEach(i=>{ if(!imap[i.order_id]) imap[i.order_id]=[]; imap[i.order_id].push({id:i.id,productId:i.product_id,productName:i.product_name,catId:i.cat_id,qty:i.qty}); });
+    S.orders=orders.map(o=>({
+      id:o.id, customerId:o.customer_id, customerName:o.customer_name,
+      driverId:o.driver_id, routeOrder:o.route_order||99,
+      items:imap[o.id]||[], bagCount:o.bag_count||1,
+      deliveryDate:o.delivery_date, status:o.status||'pending',
+      note:o.note||'', isManual:o.is_manual||false,
+      checkedItems:o.checked_items||{}, bagsCollected:o.bags_collected||0
+    }));
+  } catch(e){ console.warn('_freshOrders:', e.message); }
+}
+
+async function _freshCustProds() {
+  try {
+    const rows = await _get('cust_products','?select=*&limit=10000');
+    custProds={};
+    rows.forEach(r=>{ if(!custProds[r.cust_id]) custProds[r.cust_id]=new Set(); custProds[r.cust_id].add(r.product_id); });
+    S.customers.forEach(c=>{ if(!custProds[c.id]) custProds[c.id]=new Set(); });
+  } catch(e){ console.warn('_freshCustProds:', e.message); }
+}
+
+async function _freshCustomers() {
+  try {
+    const custs = await _get('customers','?select=*&order=name&limit=10000');
+    S.customers = custs.map(c => ({
+      id:c.id, name:c.name, address:c.address||'', frequency:c.frequency||'Weekly',
+      dueDay:c.due_day||4,
+      nextDeliveryOverride: c.next_delivery_override||null,
+      custType: c.cust_type||null,
+      deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4],
+      dayDrivers: c.day_drivers ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : null,
+      email:c.email||'', phone:c.phone||'',
+      notes:c.notes||'', accessCode:c.access_code||'', recvNote:c.recv_note||'',
+      fixedOrder:c.fixed_order||false,
+      fixedQtys:(()=>{ try{ const v=c.fixed_qtys; if(!v) return {}; if(typeof v==='object') return v; return JSON.parse(v); }catch(e){ return {}; } })(),
+      skipReturn:c.skip_return||false,
+      active:c.active!==0, driverId:c.driver_id||null, routeOrder:c.route_order||99
+    }));
+  } catch(e){ console.warn('_freshCustomers:', e.message); }
+}
+
 async function loadFromDB() {
   _toast('Connecting to database…', 4000);
   try {
@@ -3679,7 +3768,6 @@ const _origSaveEO = saveEO;
 saveEO = async function() {
   const o = S.orders.find(x => x.id===eoId); if (!o) return;
   
-  // If all items are zero qty — delete the whole order instead of saving empty
   const totalQty = o.items.reduce((s,it) => s + (it.qty||0), 0);
   if(totalQty === 0) {
     if(confirm('All items are zero. Delete this order completely?')) {
@@ -3699,9 +3787,30 @@ saveEO = async function() {
       delivery_date: document.getElementById('eo-date').value,
       note: document.getElementById('eo-note').value
     },'?id=eq.'+eoId);
-    for (const it of o.items) {
-      if (it.id) await _patch('order_items',{qty:it.qty},'?id=eq.'+it.id);
+
+    // Get current DB items for this order
+    const dbItems = await _get('order_items','?order_id=eq.'+eoId+'&select=id,product_id,qty');
+    const localPids = new Set(o.items.filter(it=>it.qty>0).map(it=>it.productId));
+
+    // Delete items removed from order
+    for(const dbi of dbItems) {
+      if(!localPids.has(dbi.product_id)) {
+        await _del('order_items','?id=eq.'+dbi.id);
+      }
     }
+
+    // Update or insert remaining items
+    for(const it of o.items.filter(x=>x.qty>0)) {
+      const existing = dbItems.find(d=>d.product_id===it.productId);
+      if(existing) {
+        await _patch('order_items',{qty:it.qty},'?id=eq.'+existing.id);
+      } else {
+        await _post('order_items',[{id:uid(),order_id:eoId,product_id:it.productId,product_name:it.productName,cat_id:it.catId||'',qty:it.qty}]);
+      }
+    }
+
+    // Update local items to only keep qty>0
+    o.items = o.items.filter(x=>x.qty>0);
     _origSaveEO();
     _toast('✓ Order saved', 1500);
   } catch(e) {
