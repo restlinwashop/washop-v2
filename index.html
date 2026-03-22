@@ -3751,13 +3751,10 @@ async function _freshOrders() {
     }
     const imap={};
     ois.forEach(i=>{ if(!imap[i.order_id]) imap[i.order_id]=[]; imap[i.order_id].push({id:i.id,productId:i.product_id,productName:i.product_name,catId:i.cat_id,qty:i.qty}); });
-    // If Edit Order modal is open, preserve that order's local items (user may have unsaved changes)
-    const _eoOpen = eoId && document.getElementById('eo-modal')?.classList.contains('open');
-    const _eoItems = _eoOpen ? (S.orders.find(x=>x.id===eoId)?.items || []) : null;
     S.orders=orders.map(o=>({
       id:o.id, customerId:o.customer_id, customerName:o.customer_name,
       driverId:o.driver_id, routeOrder:o.route_order||99,
-      items:(_eoOpen && o.id===eoId) ? _eoItems : (imap[o.id]||[]), bagCount:o.bag_count||1,
+      items:imap[o.id]||[], bagCount:o.bag_count||1,
       deliveryDate:o.delivery_date, status:o.status||'pending',
       note:o.note||'', isManual:o.is_manual||false,
       checkedItems:o.checked_items||{}, bagsCollected:o.bags_collected||0
@@ -4005,8 +4002,6 @@ saveEO = async function() {
     o.deliveryDate = document.getElementById('eo-date').value;
     o.note = document.getElementById('eo-note').value;
     closeEO();
-    // Fresh reload so order card shows correct items
-    await _freshOrders();
     renderOrders(); updateOrderBadge();
     addActivity('Edited order: '+o.customerName);
     _toast('✓ Order saved', 1500);
