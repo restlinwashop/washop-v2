@@ -2562,6 +2562,11 @@ function renderDriverApp(){
              ${o.items.map(it=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f9fafb;font-size:15px"><span>${it.productName}</span><span style="font-weight:700">${it.qty}</span></div>`).join('')}`
         }
       </div>
+      ${isDone?`
+      <!-- Undo delivered -->
+      <div style="padding:12px 18px 14px">
+        <button id="dundo-${o.id}" style="width:100%;padding:12px;background:#fff;border:2px solid #f87171;border-radius:10px;font-size:14px;font-weight:600;color:#dc2626;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">↩ Undo — Mark as Packed</button>
+      </div>`:''}
       ${!isDone?`
       <!-- Bag pickup -->
       <div style="padding:14px 18px;background:#f9fafb;border-top:1px solid #f3f4f6">
@@ -2579,7 +2584,9 @@ function renderDriverApp(){
       <div style="padding:0 18px 18px">
         ${o.note==='PU Only'
           ? `<button id="dpickup-${o.id}" style="width:100%;padding:18px;background:#1d4ed8;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">📦 Mark Picked Up</button>`
-          : `<button id="ddeliver-${o.id}" style="width:100%;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">✓ Mark Delivered</button>`
+          : o.status==='packed'
+            ? `<button id="ddeliver-${o.id}" style="width:100%;padding:18px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation">✓ Mark Delivered</button>`
+            : `<div style="width:100%;padding:14px;background:#fef3c7;border-radius:12px;font-size:14px;font-weight:600;color:#92400e;text-align:center">⏳ Not packed yet</div>`
         }
       </div>`:''}
     </div>`;
@@ -2628,6 +2635,12 @@ function renderDriverApp(){
       let t=false;
       deliverBtn.addEventListener('touchend',e=>{e.preventDefault();t=true;confirmDelivery(o.id);setTimeout(()=>t=false,300);},{passive:false});
       deliverBtn.addEventListener('click',()=>{if(!t)confirmDelivery(o.id);});
+    }
+    const undoBtn=document.getElementById('dundo-'+o.id);
+    if(undoBtn){
+      let t=false;
+      undoBtn.addEventListener('touchend',e=>{e.preventDefault();t=true;undoDelivery(o.id);setTimeout(()=>t=false,300);},{passive:false});
+      undoBtn.addEventListener('click',()=>{if(!t)undoDelivery(o.id);});
     }
     const pickupBtn=document.getElementById('dpickup-'+o.id);
     if(pickupBtn){
@@ -3955,6 +3968,18 @@ confirmDelivery = async function(id) {
   // Re-render after delay so driver sees green flash before card moves
   setTimeout(()=>{ renderDriverApp(); checkAlarms(); }, 800);
 };
+
+async function undoDelivery(id) {
+  if(!confirm('Mark this order as packed (undo delivered)?')) return;
+  const o = S.orders.find(x=>x.id===id); if(!o) return;
+  try {
+    await _patch('orders',{status:'packed'},'?id=eq.'+id);
+    o.status = 'packed';
+    renderDriverOrders();
+    _toast('✓ Marked as packed', 1500);
+  } catch(e) { alert('Failed: '+e.message); }
+}
+
 
 const _origSaveEO = saveEO;
 saveEO = async function() {
