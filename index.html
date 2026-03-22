@@ -3991,16 +3991,15 @@ saveEO = async function() {
       }
     }
 
-    // Update or insert remaining items — each independently to avoid race conditions
-    const savePromises = o.items.filter(x=>x.qty>0).map(it => {
+    // Update or insert remaining items — sequential to avoid Supabase dropping concurrent requests
+    for (const it of o.items.filter(x=>x.qty>0)) {
       const existing = dbItems.find(d=>d.product_id===it.productId);
       if(existing) {
-        return _patch('order_items',{qty:it.qty},'?order_id=eq.'+eoId+'&product_id=eq.'+it.productId);
+        await _patch('order_items',{qty:it.qty},'?id=eq.'+existing.id);
       } else {
-        return _post('order_items',[{id:uid(),order_id:eoId,product_id:it.productId,product_name:it.productName,cat_id:it.catId||'',qty:it.qty}]);
+        await _post('order_items',[{id:uid(),order_id:eoId,product_id:it.productId,product_name:it.productName,cat_id:it.catId||'',qty:it.qty}]);
       }
-    });
-    await Promise.all(savePromises);
+    }
 
     // Update local items to only keep qty>0
     o.items = o.items.filter(x=>x.qty>0);
