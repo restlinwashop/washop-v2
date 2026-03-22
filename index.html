@@ -1819,6 +1819,18 @@ function renderWeekStrip(){
 function renderOrders(){
   renderWeekStrip();
   document.getElementById('order-day-label').textContent=fmtFull(selDay);
+
+  // Check if any orders for this day have empty items — if so, reload fresh first
+  const dayOrders=S.orders.filter(o=>o.deliveryDate===selDay);
+  const hasEmptyItems = dayOrders.some(o=>o.items.length===0 && o.note!=='PU Only' && o.status!=='delivered');
+  if(hasEmptyItems){
+    _freshOrders().then(()=>_renderOrdersInner());
+    return;
+  }
+  _renderOrdersInner();
+}
+
+function _renderOrdersInner(){
   const dayOrders=S.orders.filter(o=>o.deliveryDate===selDay);
 
   // Due-but-no-order customers
