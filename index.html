@@ -3972,30 +3972,11 @@ saveEO = async function() {
       note: document.getElementById('eo-note').value
     },'?id=eq.'+eoId);
 
-    // Get current DB items for this order — use _getAll to avoid limit issues
-    const dbItemsRaw = await _getAll('order_items','?order_id=eq.'+eoId+'&select=id,product_id,qty');
-    // Deduplicate — keep only one per product_id (take first)
-    const seen = new Set();
-    const dbItems = dbItemsRaw.filter(i => { if(seen.has(i.product_id)) return false; seen.add(i.product_id); return true; });
-    const localPids = new Set(o.items.filter(it=>it.qty>0).map(it=>it.productId));
-
-    // Delete items removed from order
-    for(const dbi of dbItems) {
-      if(!localPids.has(dbi.product_id)) {
-        await _del('order_items','?id=eq.'+dbi.id);
-      }
-    }
-
-    // Update or insert remaining items — sequential with id-based patch
+    // DELETE all existing items, then INSERT fresh — guaranteed clean write
+    await _del('order_items','?order_id=eq.'+eoId);
     for (const it of o.items.filter(x=>x.qty>0)) {
-      const existing = dbItems.find(d=>d.product_id===it.productId);
-      if(existing) {
-        await _patch('order_items',{qty:it.qty},'?id=eq.'+existing.id);
-      } else {
-        await _post('order_items',[{id:uid(),order_id:eoId,product_id:it.productId,product_name:it.productName,cat_id:it.catId||'',qty:it.qty}]);
-      }
+      await _post('order_items',[{id:uid(),order_id:eoId,product_id:it.productId,product_name:it.productName,cat_id:it.catId||'',qty:it.qty}]);
     }
-
     // Update local items to only keep qty>0
     o.items = o.items.filter(x=>x.qty>0);
     // Update order date/note in local state
