@@ -6041,13 +6041,13 @@ ensureDeliveryDaysColumn();
               if(orderActive) renderOrders();
               if(dispatchActive){ renderDispatch(); updateDispSummary(); }
             });
-          }, 1500); // 1.5s debounce — lets our own save finish first
+          }, 3000); // 3s debounce — ensures order_items written before re-fetch
           return;
         }
 
         // receiving_log, op_transfers etc — full reload but debounced
         clearTimeout(_rtDebounce);
-        _rtDebounce = setTimeout(()=>loadFromDB(), 1500);
+        _rtDebounce = setTimeout(()=>{ _freshOrders().then(()=>{ const oa=document.getElementById('page-order')?.classList.contains('active'); const da=document.getElementById('page-dispatch')?.classList.contains('active'); if(oa)renderOrders(); if(da){renderDispatch();updateDispSummary();} }); }, 3000);
       } catch(e) {}
     };
 
