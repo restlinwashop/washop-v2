@@ -1819,15 +1819,8 @@ function renderWeekStrip(){
 function renderOrders(){
   renderWeekStrip();
   document.getElementById('order-day-label').textContent=fmtFull(selDay);
-
-  // Check if any orders for this day have empty items — if so, reload fresh first
-  const dayOrders=S.orders.filter(o=>o.deliveryDate===selDay);
-  const hasEmptyItems = dayOrders.some(o=>o.items.length===0 && o.note!=='PU Only' && o.status!=='delivered');
-  if(hasEmptyItems){
-    _freshOrders().then(()=>_renderOrdersInner());
-    return;
-  }
-  _renderOrdersInner();
+  // Always fresh-load from DB before rendering to ensure items are correct
+  _freshOrders().then(()=>_renderOrdersInner());
 }
 
 function _renderOrdersInner(){
@@ -3758,12 +3751,9 @@ saveReceiving = async function() {
     await _post('receiving_log',[{id:lid,customer_id:c.id,customer_name:c.name,delivery_date:delivDate,received_on:todayStr(),time:timeStr()}]);
     await _post('receiving_log_items', items.map(it => ({id:uid(),log_id:lid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
     await _post('history', items.map(it => ({id:uid(),date:todayStr(),customer_id:c.id,product_id:it.productId,qty:it.qty,type:'receive'})));
-    // Fresh reload orders BEFORE calling _origSaveReceiving so renderOrders has correct items
-    await _freshOrders();
     _origSaveReceiving();
-    // Re-render orders after fresh load to ensure items display correctly
-    const orderPageActive = document.getElementById('page-order')?.classList.contains('active');
-    if(orderPageActive) renderOrders();
+    // Fresh reload orders so items appear correctly (not as missing)
+    await _freshOrders();
     _toast('✓ Saved', 2000);
     if(c.nextDeliveryOverride) {
       c.nextDeliveryOverride = null;
