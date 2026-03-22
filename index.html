@@ -3760,11 +3760,12 @@ async function _freshOrders() {
       note:o.note||'', isManual:o.is_manual||false,
       checkedItems:o.checked_items||{}, bagsCollected:o.bags_collected||0
     }));
-    // If EO modal is open, restore user's unsaved item changes
+    // If EO modal is open, restore user's unsaved item changes and re-render
     if(eoId && document.getElementById('eo-modal')?.classList.contains('open')){
       const editingOrder = S.orders.find(x=>x.id===eoId);
-      if(editingOrder && window._eoUnsavedItems) {
-        editingOrder.items = window._eoUnsavedItems;
+      if(editingOrder && window._eoUnsavedItems){
+        editingOrder.items = window._eoUnsavedItems.map(x=>({...x}));
+        _renderEOItems(editingOrder);
       }
     }
   } catch(e){ console.warn('_freshOrders:', e.message); }
