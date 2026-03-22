@@ -662,6 +662,7 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       <div class="admin-tab" onclick="showAdminTab('categories',this)">Categories</div>
       <div class="admin-tab" onclick="showAdminTab('products',this)">Products</div>
       <div class="admin-tab" onclick="showAdminTab('frequencies',this)">Frequencies</div>
+      <div class="admin-tab" onclick="showAdminTab('archive',this)">🗄 Archive</div>
     </div>
 
     <!-- CUSTOMERS -->
@@ -753,6 +754,19 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       </div>
       <div class="section-title">Custom Frequencies</div>
       <div id="custom-freq-list"></div>
+    </div>
+
+    <!-- ARCHIVE -->
+    <div class="admin-section" id="admin-archive">
+      <div class="add-form">
+        <div class="section-title">🗄 Data Archive</div>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:16px">WashOps keeps the last <strong>90 days</strong> of active data. Older data can be exported to CSV and removed to keep the system fast.</p>
+        <div id="archive-status" style="margin-bottom:16px;font-size:13px;color:var(--muted)">Click Check Status to begin.</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="checkArchiveStatus()">🔍 Check Status</button>
+          <button class="btn btn-secondary" onclick="runArchive()" id="archive-btn" style="display:none">⬇ Export &amp; Archive Old Data</button>
+        </div>
+      </div>
     </div>
 
     <!-- DRIVERS -->
@@ -3046,10 +3060,94 @@ function renderCChistory(){
 // ═══════════════════════════════════════════════
 // ADMIN
 // ═══════════════════════════════════════════════
+
+async function checkArchiveStatus() {
+  const statusEl = document.getElementById('archive-status');
+  const btnEl = document.getElementById('archive-btn');
+  if (!statusEl) return;
+  statusEl.textContent = 'Checking…';
+  try {
+    const cutoff = _cutoff90();
+    const [oldOrders, oldHistory, oldRecvLog] = await Promise.all([
+      _getAll('orders','?select=id&delivery_date=lt.'+cutoff),
+      _getAll('history','?select=id&date=lt.'+cutoff),
+      _getAll('receiving_log','?select=id&received_on=lt.'+cutoff),
+    ]);
+    if (!oldOrders.length && !oldHistory.length && !oldRecvLog.length) {
+      statusEl.innerHTML = '<span style="color:var(--green)">✓ No data older than 90 days. Nothing to archive.</span>';
+      if (btnEl) btnEl.style.display = 'none';
+    } else {
+      statusEl.innerHTML = 'Found data older than <strong>'+cutoff+'</strong>:<br>'
+        +'• <strong>'+oldOrders.length+'</strong> orders<br>'
+        +'• <strong>'+oldHistory.length+'</strong> history records<br>'
+        +'• <strong>'+oldRecvLog.length+'</strong> receiving log entries<br><br>'
+        +'<span style="color:var(--warn)">Export to CSV first, then delete from database.</span>';
+      if (btnEl) btnEl.style.display = 'inline-flex';
+    }
+  } catch(e) { statusEl.textContent = 'Error: ' + e.message; }
+}
+
+async function runArchive() {
+  if (!confirm('Export all data older than 90 days to CSV files, then delete from database. Continue?')) return;
+  const cutoff = _cutoff90();
+  const statusEl = document.getElementById('archive-status');
+  statusEl.textContent = 'Fetching data…';
+  try {
+    const oldOrders = await _getAll('orders','?select=*&delivery_date=lt.'+cutoff);
+    const oldOrderIds = oldOrders.map(o=>o.id);
+    let oldOrderItems = [];
+    for (let i=0; i<oldOrderIds.length; i+=200) {
+      const rows = await _getAll('order_items','?select=*&order_id=in.('+oldOrderIds.slice(i,i+200).join(',')+')');
+      oldOrderItems = oldOrderItems.concat(rows);
+    }
+    const oldHistory = await _getAll('history','?select=*&date=lt.'+cutoff);
+    const oldRecvLog = await _getAll('receiving_log','?select=*&received_on=lt.'+cutoff);
+    const oldRecvLogIds = oldRecvLog.map(r=>r.id);
+    let oldRecvItems = [];
+    for (let i=0; i<oldRecvLogIds.length; i+=200) {
+      const rows = await _getAll('receiving_log_items','?select=*&log_id=in.('+oldRecvLogIds.slice(i,i+200).join(',')+')');
+      oldRecvItems = oldRecvItems.concat(rows);
+    }
+    const dateTag = new Date().toISOString().split('T')[0];
+    _downloadCSV('washops_archive_orders_'+dateTag+'.csv', _toCSV(oldOrders));
+    _downloadCSV('washops_archive_order_items_'+dateTag+'.csv', _toCSV(oldOrderItems));
+    _downloadCSV('washops_archive_history_'+dateTag+'.csv', _toCSV(oldHistory));
+    _downloadCSV('washops_archive_receiving_log_'+dateTag+'.csv', _toCSV(oldRecvLog));
+    _downloadCSV('washops_archive_receiving_items_'+dateTag+'.csv', _toCSV(oldRecvItems));
+    statusEl.textContent = 'CSVs downloaded. Deleting old data…';
+    for (let i=0; i<oldOrderIds.length; i+=200) await _del('order_items','?order_id=in.('+oldOrderIds.slice(i,i+200).join(',')+')');
+    if (oldOrders.length) await _del('orders','?delivery_date=lt.'+cutoff);
+    if (oldHistory.length) await _del('history','?date=lt.'+cutoff);
+    for (let i=0; i<oldRecvLogIds.length; i+=200) await _del('receiving_log_items','?log_id=in.('+oldRecvLogIds.slice(i,i+200).join(',')+')');
+    if (oldRecvLog.length) await _del('receiving_log','?received_on=lt.'+cutoff);
+    statusEl.innerHTML = '<span style="color:var(--green)">✓ Archive complete! Database is clean.</span>';
+    document.getElementById('archive-btn').style.display = 'none';
+    _toast('✓ Archive complete', 3000);
+  } catch(e) { statusEl.textContent = '⚠ Error: ' + e.message; }
+}
+
+function _toCSV(rows) {
+  if (!rows || !rows.length) return '';
+  const keys = Object.keys(rows[0]);
+  const lines = [keys.join(',')];
+  rows.forEach(r => lines.push(keys.map(k => {
+    const v = r[k] == null ? '' : String(r[k]);
+    return (v.includes(',')||v.includes('"')||v.includes('\n')) ? '"'+v.replace(/"/g,'""')+'"' : v;
+  }).join(',')));
+  return lines.join('\n');
+}
+
+function _downloadCSV(filename, csv) {
+  if (!csv) return;
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+
 function showAdminTab(id,el){
   document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
   el.classList.add('active');document.getElementById('admin-'+id).classList.add('active');renderAdmin();
+  if(id==='archive') checkArchiveStatus();
 }
 function renderAdmin(){
   // Populate driver filter
@@ -3570,6 +3668,27 @@ const _post = (t, b)    => _q('POST',   t, b);
 const _patch= (t, b, p) => _q('PATCH',  t, b, p);
 const _del  = (t, p)    => _q('DELETE', t, null, p);
 
+async function _getAll(table, params) {
+  const pageSize = 1000;
+  let allRows = [], offset = 0;
+  while (true) {
+    const sep = (params && params.includes('?')) ? '&' : '?';
+    const url = _SURL + '/rest/v1/' + table + (params||'') + sep + 'limit=' + pageSize + '&offset=' + offset;
+    const res = await fetch(url, { method:'GET', headers:_hdr('GET') });
+    if (!res.ok) { const t = await res.text(); throw new Error(table+': '+t.slice(0,150)); }
+    const txt = await res.text();
+    const rows = txt ? JSON.parse(txt) : [];
+    allRows = allRows.concat(rows);
+    if (rows.length < pageSize) break;
+    offset += pageSize;
+  }
+  return allRows;
+}
+function _cutoff90() {
+  const d = new Date(); d.setDate(d.getDate() - 90);
+  return d.toISOString().split('T')[0];
+}
+
 function _toast(msg, ms) {
   let el = document.getElementById('_toast');
   if (!el) {
@@ -3596,10 +3715,17 @@ function _syncBadge(ok) {
 
 async function _freshOrders() {
   try {
-    const [orders, ois] = await Promise.all([
-      _get('orders','?select=*&order=delivery_date.desc,route_order.asc&limit=10000'),
-      _get('order_items','?select=*&limit=10000')
-    ]);
+    const cutoff = _cutoff90();
+    const orders = await _getAll('orders','?select=*&delivery_date=gte.'+cutoff+'&order=delivery_date.desc,route_order.asc');
+    const orderIds = orders.map(o=>o.id);
+    let ois = [];
+    if (orderIds.length > 0) {
+      for (let i = 0; i < orderIds.length; i += 200) {
+        const batch = orderIds.slice(i, i+200);
+        const rows = await _getAll('order_items','?select=*&order_id=in.('+batch.join(',')+')');
+        ois = ois.concat(rows);
+      }
+    }
     const imap={};
     ois.forEach(i=>{ if(!imap[i.order_id]) imap[i.order_id]=[]; imap[i.order_id].push({id:i.id,productId:i.product_id,productName:i.product_name,catId:i.cat_id,qty:i.qty}); });
     S.orders=orders.map(o=>({
@@ -3615,7 +3741,7 @@ async function _freshOrders() {
 
 async function _freshCustProds() {
   try {
-    const rows = await _get('cust_products','?select=*&limit=10000');
+    const rows = await _getAll('cust_products','?select=*');
     custProds={};
     rows.forEach(r=>{ if(!custProds[r.cust_id]) custProds[r.cust_id]=new Set(); custProds[r.cust_id].add(r.product_id); });
     S.customers.forEach(c=>{ if(!custProds[c.id]) custProds[c.id]=new Set(); });
@@ -3624,7 +3750,7 @@ async function _freshCustProds() {
 
 async function _freshCustomers() {
   try {
-    const custs = await _get('customers','?select=*&order=name&limit=10000');
+    const custs = await _getAll('customers','?select=*&order=name');
     S.customers = custs.map(c => ({
       id:c.id, name:c.name, address:c.address||'', frequency:c.frequency||'Weekly',
       dueDay:c.due_day||4,
@@ -3646,19 +3772,19 @@ async function loadFromDB() {
   _toast('Connecting to database…', 4000);
   try {
     const [custs,drvs,cats,prods,cpRows,orders,ois,stock,rcvLog,rcvItems,hist,prices,pkgs] = await Promise.all([
-      _get('customers','?select=*&order=name&limit=10000'),
-      _get('drivers','?select=*&order=name&limit=1000'),
-      _get('categories','?select=*&order=name&limit=1000'),
-      _get('products','?select=*&order=name&limit=10000'),
-      _get('cust_products','?select=*&limit=10000'),
-      _get('orders','?select=*&order=delivery_date.desc,route_order.asc&limit=10000'),
-      _get('order_items','?select=*&limit=10000'),
-      _get('stock_entries','?select=*&limit=10000'),
-      _get('receiving_log','?select=*&order=received_on.desc,time.desc&limit=10000'),
-      _get('receiving_log_items','?select=*&limit=10000'),
-      _get('history','?select=*&order=date.desc&limit=10000'),
-      _get('cust_prices','?select=*&limit=10000'),
-      _get('packages','?select=*&order=name&limit=1000'),
+      _getAll('customers','?select=*&order=name'),
+      _getAll('drivers','?select=*&order=name'),
+      _getAll('categories','?select=*&order=name'),
+      _getAll('products','?select=*&order=name'),
+      _getAll('cust_products','?select=*'),
+      _getAll('orders','?select=*&delivery_date=gte.'+_cutoff90()+'&order=delivery_date.desc,route_order.asc'),
+      _getAll('order_items','?select=*'),
+      _getAll('stock_entries','?select=*'),
+      _getAll('receiving_log','?select=*&received_on=gte.'+_cutoff90()+'&order=received_on.desc,time.desc'),
+      _getAll('receiving_log_items','?select=*'),
+      _getAll('history','?select=*&date=gte.'+_cutoff90()+'&order=date.desc'),
+      _getAll('cust_prices','?select=*'),
+      _getAll('packages','?select=*&order=name'),
     ]);
 
     S.customers = custs.map(c => ({
@@ -4950,34 +5076,31 @@ function renderOperation() {
     reqGrid.innerHTML = '<div style="font-size:13px;color:var(--muted)">No orders found for ' + fmtD(date) + '. Check Order / Pack page.</div>';
   }
 
-  // ── Entry grid: ALL products grouped by sub-category ──
+  // ── Entry grid: grouped by sub-category ──
   const entryGrid = document.getElementById('op-entry-grid');
 
-  // Determine sub-category group for a product
   function _opGroup(p) {
     const cat = S.categories.find(c => c.id === p.catId);
     const catName = (cat?.name || '').toLowerCase();
     const pname = (p.name || '').toLowerCase();
-    if (catName.includes('cog') || pname.includes('(cog)') || pname.includes('cog)')) return 'COG';
+    if (catName.includes('cog') || pname.includes('(cog)')) return 'COG';
     if (catName.includes('napkin') || pname.includes('napkin')) return 'NAPKIN';
-    if (catName.includes('table cloth') || catName.includes('tablecloth') || pname.includes('table cloth') || pname.includes('tablecloth')) return 'TABLE CLOTH';
+    if (catName.includes('table cloth') || catName.includes('tablecloth') || pname.includes('table cloth')) return 'TABLE CLOTH';
     if (catName.includes('towel') || pname.includes('towel')) return 'TOWEL';
     return 'LINEN';
   }
 
   const groupOrder = ['COG','TOWEL','NAPKIN','TABLE CLOTH','LINEN'];
   const groupColors = {
-    'COG':         {bg:'#fef3c7', border:'#fbbf24', badge:'#92400e', badgeBg:'#fef3c7'},
-    'TOWEL':       {bg:'#dbeafe', border:'#93c5fd', badge:'#1d4ed8', badgeBg:'#dbeafe'},
-    'NAPKIN':      {bg:'#f0fdf4', border:'#86efac', badge:'#15803d', badgeBg:'#dcfce7'},
-    'TABLE CLOTH': {bg:'#faf5ff', border:'#d8b4fe', badge:'#7e22ce', badgeBg:'#f3e8ff'},
-    'LINEN':       {bg:'#f0fdf4', border:'#6ee7b7', badge:'#065f46', badgeBg:'#d1fae5'},
+    'COG':         {border:'#fbbf24', badge:'#92400e', badgeBg:'#fef3c7'},
+    'TOWEL':       {border:'#93c5fd', badge:'#1d4ed8', badgeBg:'#dbeafe'},
+    'NAPKIN':      {border:'#86efac', badge:'#15803d', badgeBg:'#dcfce7'},
+    'TABLE CLOTH': {border:'#d8b4fe', badge:'#7e22ce', badgeBg:'#f3e8ff'},
+    'LINEN':       {border:'#6ee7b7', badge:'#065f46', badgeBg:'#d1fae5'},
   };
 
-  // Group products
-  const grouped = {};
-  groupOrder.forEach(g => grouped[g] = []);
-  S.products.forEach(p => { const g = _opGroup(p); grouped[g].push(p); });
+  const grouped = {}; groupOrder.forEach(g => grouped[g] = []);
+  S.products.forEach(p => grouped[_opGroup(p)].push(p));
 
   let entryHtml = '';
   groupOrder.forEach(groupName => {
@@ -4986,37 +5109,30 @@ function renderOperation() {
     const gc = groupColors[groupName];
     entryHtml += `<div style="margin-bottom:24px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid ${gc.border}">
-        <span style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;color:#1e2235;letter-spacing:.5px">${groupName}</span>
+        <span style="font-family:'Syne',sans-serif;font-size:15px;font-weight:800;letter-spacing:.5px">${groupName}</span>
         <span style="font-size:11px;font-weight:700;background:${gc.badgeBg};color:${gc.badge};padding:2px 10px;border-radius:20px;border:1px solid ${gc.border}">${prods.length} products</span>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">`;
-
     prods.forEach(p => {
-      const pid = p.id;
-      const pname = p.name;
-      const cat = S.categories.find(c => c.id === p.catId);
-      const catType = cat?.type || 'linen';
+      const pid = p.id, pname = p.name;
       const qty = opQtys[pid] || 0;
       const tracked = p.trackStock !== false;
-      const activeBorder = qty > 0 ? gc.border : 'var(--border)';
-      const activeBg = qty > 0 ? gc.bg : '#f9fafb';
-      entryHtml += `<div style="background:#fff;border:2px solid ${activeBorder};border-radius:14px;padding:14px;transition:border-color .2s;${!tracked?'opacity:0.85':''}" id="opcard-${pid}">
-        <div style="font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.3;min-height:32px">${pname}${!tracked?` <span style="font-size:9px;color:#9ca3af">Op Only</span>`:''}</div>
+      entryHtml += `<div style="background:#fff;border:2px solid ${qty>0?gc.border:'var(--border)'};border-radius:14px;padding:14px;transition:border-color .2s${!tracked?';opacity:0.85':''}">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.3;min-height:32px">${pname}${!tracked?' <span style="font-size:9px;color:#9ca3af">Op Only</span>':''}</div>
         <div id="opq-${pid}"
           onclick="openKP('${pname}','How many sending to Factory 2?',(v)=>{opQtys['${pid}']=v;_updateOpCard('${pid}',v);},${qty})"
-          style="font-family:'DM Mono',monospace;font-size:40px;font-weight:500;text-align:center;
-                 line-height:1.2;color:${qty>0?'#16a34a':'#9ca3af'};cursor:pointer;padding:12px 0;
-                 background:${activeBg};border-radius:10px;border:2px dashed ${qty>0?gc.border:'#e5e7eb'};
+          style="font-family:'DM Mono',monospace;font-size:40px;font-weight:500;text-align:center;line-height:1.2;
+                 color:${qty>0?'#16a34a':'#9ca3af'};cursor:pointer;padding:12px 0;
+                 background:${qty>0?'#f0fdf4':'#f9fafb'};border-radius:10px;
+                 border:2px dashed ${qty>0?gc.border:'#e5e7eb'};
                  transition:all .15s;user-select:none;-webkit-tap-highlight-color:transparent">
           ${qty.toLocaleString()}
         </div>
         <div style="text-align:center;font-size:9px;color:var(--muted);margin-top:5px;font-weight:600">TAP TO ENTER</div>
       </div>`;
     });
-
     entryHtml += `</div></div>`;
   });
-
   entryGrid.innerHTML = entryHtml;
 
   // ── F2 Stock ──
@@ -5172,7 +5288,7 @@ loadFromDB = async function() {
   await _origLoadFromDB();
   // Always load op_transfers
   try {
-    const transfers = await _get('op_transfers', '?select=*&order=date.desc,time_sent.desc&limit=10000');
+    const transfers = await _getAll('op_transfers','?select=*&order=date.desc,time_sent.desc');
     S.opTransfers = transfers.map(t => ({
       id: t.id, date: t.date, productId: t.product_id, productName: t.product_name, qty: t.qty, time: t.time_sent||''
     }));
