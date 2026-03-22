@@ -3758,9 +3758,12 @@ saveReceiving = async function() {
     await _post('receiving_log',[{id:lid,customer_id:c.id,customer_name:c.name,delivery_date:delivDate,received_on:todayStr(),time:timeStr()}]);
     await _post('receiving_log_items', items.map(it => ({id:uid(),log_id:lid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
     await _post('history', items.map(it => ({id:uid(),date:todayStr(),customer_id:c.id,product_id:it.productId,qty:it.qty,type:'receive'})));
-    _origSaveReceiving();
-    // Fresh reload orders so items appear correctly (not as missing)
+    // Fresh reload orders BEFORE calling _origSaveReceiving so renderOrders has correct items
     await _freshOrders();
+    _origSaveReceiving();
+    // Re-render orders after fresh load to ensure items display correctly
+    const orderPageActive = document.getElementById('page-order')?.classList.contains('active');
+    if(orderPageActive) renderOrders();
     _toast('✓ Saved', 2000);
     if(c.nextDeliveryOverride) {
       c.nextDeliveryOverride = null;
@@ -6041,13 +6044,13 @@ ensureDeliveryDaysColumn();
               if(orderActive) renderOrders();
               if(dispatchActive){ renderDispatch(); updateDispSummary(); }
             });
-          }, 3000); // 3s debounce — ensures order_items written before re-fetch
+          }, 1500); // 1.5s debounce — lets our own save finish first
           return;
         }
 
         // receiving_log, op_transfers etc — full reload but debounced
         clearTimeout(_rtDebounce);
-        _rtDebounce = setTimeout(()=>{ _freshOrders().then(()=>{ const oa=document.getElementById('page-order')?.classList.contains('active'); const da=document.getElementById('page-dispatch')?.classList.contains('active'); if(oa)renderOrders(); if(da){renderDispatch();updateDispSummary();} }); }, 3000);
+        _rtDebounce = setTimeout(()=>loadFromDB(), 1500);
       } catch(e) {}
     };
 
