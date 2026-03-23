@@ -1957,7 +1957,7 @@ function _renderOrdersInner(){
           const typeItems=useAllItems?o.items:o.items.filter(it=>prodType(it.productId)===g.type);
           return `<div class="order-row ${isDone?'done':''}">
             <div class="order-row-hdr" onclick="toggleOrderExpand('${o.id}-${g.type}')">
-              <span class="order-row-num">${o.routeOrder||idx+1}</span>
+              <span class="order-row-num">${getOrderDriver(o.customerId,o.deliveryDate)?.routeOrder||o.routeOrder||idx+1}</span>
               <span class="order-row-cust">${o.customerName}</span>
               <span class="order-row-meta">${c.frequency||''}</span>
               <span class="badge ${o.status==='pending'?'bg-warn':o.status==='packed'?'bg-green':'bg-gray'}" style="margin-left:10px">${o.status.toUpperCase()}</span>
