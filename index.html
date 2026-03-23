@@ -1908,7 +1908,7 @@ function _renderOrdersInner(){
       const drv=S.drivers.find(d=>d.id===did);
       const orders=dayOrders.filter(o=>{
         const c=S.customers.find(x=>x.id===o.customerId);
-        const oDid=c?.driverId||'__none__';
+        const oDid=o.driverId||c?.driverId||'__none__';
         if(oDid!==did)return false;
         // PUO orders: show in linen group only
         if(o.note==='PU Only') return type==='linen';
@@ -2130,11 +2130,10 @@ async function saveMO(){
 
   if(isPUO){
     // PU Only — no items needed
-    const _od1=getOrderDriver(cid,date);
-    const order={id:oid,customerId:cid,customerName:c.name,driverId:_od1.driverId,routeOrder:_od1.routeOrder||99,
+    const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,
       items:[],deliveryDate:date,bagCount:1,status:'pending',note:'PU Only',isManual:true,checkedItems:{}};
     try {
-      await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:_od1.driverId,route_order:_od1.routeOrder||99,
+      await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,
         delivery_date:date,bag_count:1,status:'pending',note:'PU Only',is_manual:true,checked_items:{}}]);
       S.orders.push(order);
       addActivity('PU Only order: '+c.name+' for '+fmtD(date));
@@ -2146,10 +2145,9 @@ async function saveMO(){
 
   const items=S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
   if(!items.length)return alert('Add at least one item.');
-  const _od2=getOrderDriver(cid,date);
-  const order={id:oid,customerId:cid,customerName:c.name,driverId:_od2.driverId,routeOrder:_od2.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note,isManual:true,checkedItems:{}};
+  const order={id:oid,customerId:cid,customerName:c.name,driverId:c.driverId,routeOrder:c.routeOrder||99,items,deliveryDate:date,bagCount:1,status:'pending',note,isManual:true,checkedItems:{}};
   try {
-    await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:_od2.driverId,route_order:_od2.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note,is_manual:true,checked_items:{}}]);
+    await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note,is_manual:true,checked_items:{}}]);
     await _post('order_items',items.map(it=>({id:uid(),order_id:oid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
     S.orders.push(order);
     addActivity('Manual order: '+c.name+' for '+fmtD(date));
@@ -3803,7 +3801,7 @@ async function _freshCustomers() {
       nextDeliveryOverride: c.next_delivery_override||null,
       custType: c.cust_type||null,
       deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4],
-      dayDrivers: c.day_drivers ? (typeof c.day_drivers === 'string' ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : c.day_drivers) : null,
+      dayDrivers: c.day_drivers ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : null,
       email:c.email||'', phone:c.phone||'',
       notes:c.notes||'', accessCode:c.access_code||'', recvNote:c.recv_note||'',
       fixedOrder:c.fixed_order||false,
@@ -3839,7 +3837,7 @@ async function loadFromDB() {
       nextDeliveryOverride: c.next_delivery_override||null,
       custType: c.cust_type||null,
       deliveryDays: c.delivery_days ? JSON.parse(c.delivery_days) : [c.due_day||4],
-      dayDrivers: c.day_drivers ? (typeof c.day_drivers === 'string' ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : c.day_drivers) : null,
+      dayDrivers: c.day_drivers ? (() => { try { return JSON.parse(c.day_drivers); } catch(e) { return null; } })() : null,
       email:c.email||'', phone:c.phone||'',
       notes:c.notes||'', accessCode:c.access_code||'', recvNote:c.recv_note||'',
       fixedOrder:c.fixed_order||false,
@@ -4358,7 +4356,23 @@ delPkg = async function(id) {
 };
 
 // Manual order
-// saveManualOrder DB override disabled — saveMO handles DB writes directly
+if (typeof saveManualOrder !== 'undefined') {
+  const _origSaveManualOrder = saveManualOrder;
+  saveManualOrder = async function() {
+    const cid = document.getElementById('mo-cust').value; const date = document.getElementById('mo-date').value;
+    if (!cid||!date) return alert('Select customer and date.');
+    const c = S.customers.find(x=>x.id===cid);
+    const items = S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
+    if (!items.length) return alert('Add at least one item.');
+    const oid = uid();
+    try {
+      await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note:document.getElementById('mo-note')?.value||'',is_manual:true,checked_items:{}}]);
+      await _post('order_items',items.map(it=>({id:uid(),order_id:oid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
+    } catch(e) { return alert('DB error: '+e.message); }
+    _origSaveManualOrder();
+    _toast('✓ Manual order added', 2000);
+  };
+}
 
 // Bag count + label print DB sync
 const _origPrintLabels = printLabels;
