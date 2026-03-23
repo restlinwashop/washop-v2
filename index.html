@@ -4358,23 +4358,7 @@ delPkg = async function(id) {
 };
 
 // Manual order
-if (typeof saveManualOrder !== 'undefined') {
-  const _origSaveManualOrder = saveManualOrder;
-  saveManualOrder = async function() {
-    const cid = document.getElementById('mo-cust').value; const date = document.getElementById('mo-date').value;
-    if (!cid||!date) return alert('Select customer and date.');
-    const c = S.customers.find(x=>x.id===cid);
-    const items = S.products.filter(p=>(moQtys[p.id]||0)>0).map(p=>({productId:p.id,productName:p.name,catId:p.catId,qty:moQtys[p.id]}));
-    if (!items.length) return alert('Add at least one item.');
-    const oid = uid();
-    try {
-      await _post('orders',[{id:oid,customer_id:cid,customer_name:c.name,driver_id:c.driverId,route_order:c.routeOrder||99,delivery_date:date,bag_count:1,status:'pending',note:document.getElementById('mo-note')?.value||'',is_manual:true,checked_items:{}}]);
-      await _post('order_items',items.map(it=>({id:uid(),order_id:oid,product_id:it.productId,product_name:it.productName,cat_id:it.catId,qty:it.qty})));
-    } catch(e) { return alert('DB error: '+e.message); }
-    _origSaveManualOrder();
-    _toast('✓ Manual order added', 2000);
-  };
-}
+// saveManualOrder DB override disabled — saveMO handles DB writes directly
 
 // Bag count + label print DB sync
 const _origPrintLabels = printLabels;
