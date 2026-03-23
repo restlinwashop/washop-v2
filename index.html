@@ -1917,7 +1917,11 @@ function _renderOrdersInner(){
         if(c?.custType==='both') return o.items.some(it=>prodType(it.productId)===type);
         // No custType — fall back to item product types
         return o.items.some(it=>prodType(it.productId)===type);
-      }).sort((a,b)=>(a.routeOrder||99)-(b.routeOrder||99));
+      }).sort((a,b)=>{
+        const ra=getOrderDriver(a.customerId,a.deliveryDate)?.routeOrder||a.routeOrder||99;
+        const rb=getOrderDriver(b.customerId,b.deliveryDate)?.routeOrder||b.routeOrder||99;
+        return ra-rb;
+      });
       if(orders.length)groups.push({driverId:did,driverName:drv?drv.name:'Unassigned',vehicle:drv?.vehicle||'',type,orders});
     });
   });
