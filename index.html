@@ -2883,12 +2883,19 @@ function renderCCfixedList(){
   }).join('');
 }
 
+async function _autoSaveFixed(){
+  const c=S.customers.find(x=>x.id===ccId); if(!c) return;
+  try{ await _patch('customers',{fixed_qtys:c.fixedQtys},'?id=eq.'+ccId); }
+  catch(e){ console.warn('autoSaveFixed:',e.message); }
+}
+
 function adjFixedQty(pid,d){
   const c=S.customers.find(x=>x.id===ccId); if(!c) return;
   if(!c.fixedQtys) c.fixedQtys={};
   c.fixedQtys[pid]=Math.max(0,(c.fixedQtys[pid]||0)+d);
   const el=document.getElementById('fxq-'+pid);
   if(el) el.textContent=c.fixedQtys[pid];
+  _autoSaveFixed();
 }
 
 function setFixedQty(pid,v){
@@ -2897,6 +2904,7 @@ function setFixedQty(pid,v){
   c.fixedQtys[pid]=Math.max(0,v);
   const el=document.getElementById('fxq-'+pid);
   if(el) el.textContent=c.fixedQtys[pid];
+  _autoSaveFixed();
 }
 
 async function saveCCfixed(){
@@ -2904,10 +2912,13 @@ async function saveCCfixed(){
   const enabled=document.getElementById('cc-fixed-enabled')?.checked||false;
   c.fixedOrder=enabled;
   if(!c.fixedQtys) c.fixedQtys={};
+  const btn=document.querySelector('[onclick="saveCCfixed()"]');
+  if(btn){ btn.textContent='Saving...'; btn.disabled=true; }
   try {
     await _patch('customers',{fixed_order:enabled, fixed_qtys:c.fixedQtys},'?id=eq.'+ccId);
     _toast('✓ Fixed order saved',2000);
   } catch(e){ _toast('⚠ Save error: '+e.message.slice(0,50),3000); }
+  if(btn){ btn.textContent='Save Fixed Order'; btn.disabled=false; }
 }
 
 function renderCCstock(){
