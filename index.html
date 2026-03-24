@@ -2060,7 +2060,8 @@ function _renderOrdersInner(){
       const drv=S.drivers.find(d=>d.id===did);
       const orders=dayOrders.filter(o=>{
         const c=S.customers.find(x=>x.id===o.customerId);
-        const oDid=o.driverId||c?.driverId||'__none__';
+        const rawDid=o.driverId||c?.driverId||'__none__';
+        const oDid=allDriverIds.includes(rawDid)?rawDid:'__none__';
         if(oDid!==did)return false;
         // PUO orders: show in linen group only
         if(o.note==='PU Only') return type==='linen';
