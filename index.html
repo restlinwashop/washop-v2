@@ -335,7 +335,6 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
     <div class="nav-item" onclick="showPage('history')"><span class="nav-icon">📈</span>History</div>
     <div class="nav-item" onclick="showPage('driver')"><span class="nav-icon">🗺️</span>Driver App</div>
     <div class="nav-section">Config</div>
-    <div class="nav-item" onclick="showPage('bulk')"><span class="nav-icon">📋</span>Bulk Edit</div>
     <div class="nav-item" onclick="showPage('admin')"><span class="nav-icon">⚙️</span>Admin</div>
     <div class="nav-item" onclick="showPage('pricing')"><span class="nav-icon">💰</span>Pricing</div>
   </nav>
@@ -591,34 +590,67 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 
   <!-- ════ HISTORY ════ -->
   <div class="page" id="page-history">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-      <button class="cat-tab active" onclick="setHistPeriod('daily',this)">Daily</button>
-      <button class="cat-tab" onclick="setHistPeriod('weekly',this)">Weekly</button>
-      <button class="cat-tab" onclick="setHistPeriod('monthly',this)">Monthly</button>
-      <button class="cat-tab" onclick="setHistPeriod('yearly',this)">Yearly</button>
-      <button class="cat-tab" onclick="setHistPeriod('custom',this)">Custom Range</button>
+    <!-- View switcher -->
+    <div style="display:flex;gap:6px;margin-bottom:16px;border-bottom:2px solid var(--border);padding-bottom:12px">
+      <button class="cat-tab active" id="hist-tab-cust" onclick="setHistView('customer')">Customer View</button>
+      <button class="cat-tab" id="hist-tab-prod" onclick="setHistView('product')">Product View</button>
     </div>
-    <div id="hist-period-ctrl" style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end"></div>
-    <div class="hist-filters">
-      <div class="field"><label>Customer</label><select id="hc" onchange="renderHistory()"><option value="">All</option></select></div>
-      <div class="field"><label>Category</label><select id="hcat" onchange="renderHistCatFilter()"><option value="">All Categories</option></select></div>
-      <div class="field"><label>Product</label><select id="hp" onchange="renderHistory()"><option value="">All</option></select></div>
-      <div class="field"><label>Type</label><select id="htype" onchange="renderHistory()"><option value="">All</option><option value="receive">Received</option><option value="dispatch">Dispatched</option></select></div>
-      <div class="field" style="display:flex;align-items:flex-end">
-        <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="margin-bottom:0">⬇ Export CSV</button>
+
+    <!-- Customer View -->
+    <div id="hist-customer-view">
+      <div id="period-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="cat-tab active" onclick="setHistPeriod('daily',this)">Daily</button>
+        <button class="cat-tab" onclick="setHistPeriod('weekly',this)">Weekly</button>
+        <button class="cat-tab" onclick="setHistPeriod('monthly',this)">Monthly</button>
+        <button class="cat-tab" onclick="setHistPeriod('yearly',this)">Yearly</button>
+        <button class="cat-tab" onclick="setHistPeriod('custom',this)">Custom Range</button>
+      </div>
+      <div id="hist-period-ctrl" style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end"></div>
+      <div class="hist-filters">
+        <div class="field"><label>Customer</label><select id="hc" onchange="renderHistory()"><option value="">All</option></select></div>
+        <div class="field"><label>Category</label><select id="hcat" onchange="renderHistCatFilter()"><option value="">All Categories</option></select></div>
+        <div class="field"><label>Product</label><select id="hp" onchange="renderHistory()"><option value="">All</option></select></div>
+        <div class="field"><label>Type</label><select id="htype" onchange="renderHistory()"><option value="">All</option><option value="receive">Received</option><option value="dispatch">Dispatched</option></select></div>
+        <div class="field" style="display:flex;align-items:flex-end">
+          <button class="btn btn-secondary" onclick="exportHistoryCSV()" style="margin-bottom:0">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:18px">
+        <div class="stat-card"><div class="stat-label">Total Received (period)</div><div class="stat-val" id="hs-recv" style="color:var(--accent2);font-size:28px;font-family:'DM Mono',monospace">0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Dispatched (period)</div><div class="stat-val" id="hs-disp" style="color:var(--accent);font-size:28px;font-family:'DM Mono',monospace">0</div></div>
+      </div>
+      <div class="grid-2" style="margin-bottom:18px">
+        <div class="card"><div class="card-header"><div class="card-title">Qty Over Time</div></div><div class="card-body"><div class="chart-wrap"><canvas id="hist-chart"></canvas></div></div></div>
+        <div class="card"><div class="card-header"><div class="card-title">Product Breakdown — Received vs Dispatched</div></div><div class="card-body" id="hist-breakdown"><div class="empty">No data</div></div></div>
+      </div>
+      <div class="card" style="overflow:hidden"><div class="card-header"><div class="card-title">Transaction Log</div></div>
+        <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Qty</th><th>Type</th></tr></thead>
+        <tbody id="hist-tbody"><tr><td colspan="5" class="empty">No history</td></tr></tbody></table></div>
       </div>
     </div>
-    <div class="grid-2" style="margin-bottom:18px">
-      <div class="stat-card"><div class="stat-label">Total Received (period)</div><div class="stat-val" id="hs-recv" style="color:var(--accent2);font-size:28px;font-family:'DM Mono',monospace">0</div></div>
-      <div class="stat-card"><div class="stat-label">Total Dispatched (period)</div><div class="stat-val" id="hs-disp" style="color:var(--accent);font-size:28px;font-family:'DM Mono',monospace">0</div></div>
-    </div>
-    <div class="grid-2" style="margin-bottom:18px">
-      <div class="card"><div class="card-header"><div class="card-title">Qty Over Time</div></div><div class="card-body"><div class="chart-wrap"><canvas id="hist-chart"></canvas></div></div></div>
-      <div class="card"><div class="card-header"><div class="card-title">Product Breakdown — Received vs Dispatched</div></div><div class="card-body" id="hist-breakdown"><div class="empty">No data</div></div></div>
-    </div>
-    <div class="card" style="overflow:hidden"><div class="card-header"><div class="card-title">Transaction Log</div></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Customer</th><th>Product</th><th>Qty</th><th>Type</th></tr></thead>
-      <tbody id="hist-tbody"><tr><td colspan="5" class="empty">No history</td></tr></tbody></table></div>
+
+    <!-- Product View -->
+    <div id="hist-product-view" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px">
+        <div class="field">
+          <label>Product</label>
+          <select id="pv-product" onchange="renderHistProductView()" style="min-width:220px">
+            <option value="">Select a product...</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="cat-tab active" id="pv-btn-week" onclick="setPvPreset('week',this)">This Week</button>
+        <button class="cat-tab" id="pv-btn-month" onclick="setPvPreset('month',this)">This Month</button>
+        <button class="cat-tab" id="pv-btn-lastmonth" onclick="setPvPreset('lastmonth',this)">Last Month</button>
+        <button class="cat-tab" id="pv-btn-3months" onclick="setPvPreset('3months',this)">Last 3 Months</button>
+        <button class="cat-tab" id="pv-btn-custom" onclick="setPvPreset('custom',this)">Custom</button>
+      </div>
+      <div id="pv-custom-range" style="display:none;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px">
+        <div class="field"><label>From</label><input type="date" id="pv-from" onchange="renderHistProductView()"></div>
+        <div class="field"><label>To</label><input type="date" id="pv-to" onchange="renderHistProductView()"></div>
+      </div>
+      <div id="pv-result"><div class="empty">Select a product above to view dispatch history</div></div>
     </div>
   </div>
 
@@ -976,59 +1008,8 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
 
 
   <!-- BULK EDIT PAGE -->
-  <div class="page" id="page-bulk">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800">Bulk Customer Editor</div>
-        <div style="font-size:12px;color:var(--muted)">Edit driver, days, and frequency for all customers in one place</div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input type="text" id="bulk-search" placeholder="Search..." oninput="renderBulk()" style="width:200px">
-        <select id="bulk-driver-filter" onchange="renderBulk()" style="width:140px">
-          <option value="">All drivers</option>
-          <option value="__none__">Unassigned</option>
-        </select>
-        <button class="btn btn-primary" onclick="saveBulkAll()">💾 Save All Changes</button>
-      </div>
-    </div>
-    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 16px;font-size:12px;margin-bottom:14px;color:#856404">
-      ⚡ Make your changes below, then click <strong>Save All Changes</strong> to apply everything at once.
-    </div>
-    <!-- Route View Toggle -->
-    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-sm btn-blue" id="bulk-view-table" onclick="setBulkView('table')">📋 Table View</button>
-      <button class="btn btn-sm btn-secondary" id="bulk-view-route" onclick="setBulkView('route')">🗺️ Route View (by Driver × Day)</button>
-      <span id="bulk-unsaved" style="font-size:12px;color:var(--warn);font-weight:600;display:none">● Unsaved changes</span>
-    </div>
-    <div id="bulk-table-view" style="overflow-x:auto">
-      <table id="bulk-table">
-        <thead>
-          <tr>
-            <th style="min-width:200px">Customer</th>
-            <th style="min-width:140px">Driver</th>
-            <th style="min-width:280px">Delivery Days</th>
-            <th style="min-width:130px">Frequency</th>
-          </tr>
-        </thead>
-        <tbody id="bulk-tbody"></tbody>
-      </table>
-    </div>
-    <div id="bulk-route-view" style="display:none">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <select id="route-driver-sel" onchange="renderRouteView()" style="width:160px"><option value="">Select Driver...</option></select>
-        <select id="route-day-sel" onchange="renderRouteView()" style="width:140px">
-          <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option>
-          <option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option>
-        </select>
-      </div>
-      <div id="route-list"></div>
-    </div>
-    <div style="margin-top:16px;display:flex;justify-content:flex-end">
-      <button class="btn btn-primary" onclick="saveBulkAll()">💾 Save All Changes</button>
-    </div>
-  </div>
 
-  
+
 
   <!-- ════ OPERATION PAGE (Factory 1) ════ -->
   <div class="page" id="page-operation">
@@ -1508,7 +1489,7 @@ function prodType(prodId){const p=S.products.find(x=>x.id===prodId);return p?cat
 // ═══════════════════════════════════════════════
 // NAV
 // ═══════════════════════════════════════════════
-const PAGE_TITLES={bulk:'Bulk Customer Editor',operation:'Operation — Factory 1',rejects:'Rejects & Damage',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
+const PAGE_TITLES={operation:'Operation — Factory 1',rejects:'Rejects & Damage',dashboard:'Dashboard',receiving:'Receiving',order:'Order / Pack',dispatch:'Dispatch',stock:'Stock Alarms',history:'History',driver:'Driver App',admin:'Admin',pricing:'Pricing'};
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -2959,6 +2940,97 @@ function renderHistChart(entries){
   const labels=Object.keys(bd).sort();
   histChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'Received',data:labels.map(d=>bd[d].receive),backgroundColor:'rgba(2,132,199,.3)',borderColor:'#0284c7',borderWidth:1.5,borderRadius:4},{label:'Dispatched',data:labels.map(d=>bd[d].dispatch),backgroundColor:'rgba(22,163,74,.3)',borderColor:'#16a34a',borderWidth:1.5,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#374151',font:{size:11}}}},scales:{x:{grid:{color:'#e2e4ec'},ticks:{color:'#6b7280',font:{size:10}}},y:{grid:{color:'#e2e4ec'},ticks:{color:'#6b7280',font:{size:10}}}}}});
 }
+// ═══════════════════════════════════════════════
+// HISTORY — PRODUCT VIEW
+// ═══════════════════════════════════════════════
+let histView = 'customer';
+let pvPreset = 'week';
+
+function setHistView(v) {
+  histView = v;
+  document.getElementById('hist-customer-view').style.display = v==='customer' ? '' : 'none';
+  document.getElementById('hist-product-view').style.display = v==='product' ? '' : 'none';
+  document.getElementById('hist-tab-cust').classList.toggle('active', v==='customer');
+  document.getElementById('hist-tab-prod').classList.toggle('active', v==='product');
+  if(v==='product') {
+    const sel = document.getElementById('pv-product');
+    if(sel && sel.options.length <= 1) {
+      sel.innerHTML = '<option value="">Select a product...</option>' +
+        S.products.slice().sort((a,b)=>_prodSortKey(a.name)-_prodSortKey(b.name))
+          .map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+    }
+    renderHistProductView();
+  }
+}
+
+function getPvDateRange() {
+  const t = todayStr();
+  if(pvPreset==='week') {
+    const mon = getMonday(t); const sun = addDays(mon, 5);
+    return {from: mon, to: sun};
+  }
+  if(pvPreset==='month') {
+    const [y,m] = t.slice(0,7).split('-');
+    const last = new Date(parseInt(y), parseInt(m), 0);
+    return {from:`${y}-${m}-01`, to:`${y}-${m}-${pad(last.getDate())}`};
+  }
+  if(pvPreset==='lastmonth') {
+    const d = new Date(t+'T12:00:00'); d.setMonth(d.getMonth()-1);
+    const y = d.getFullYear(), m = pad(d.getMonth()+1);
+    const last = new Date(y, parseInt(m), 0);
+    return {from:`${y}-${m}-01`, to:`${y}-${m}-${pad(last.getDate())}`};
+  }
+  if(pvPreset==='3months') {
+    const d = new Date(t+'T12:00:00'); d.setMonth(d.getMonth()-3);
+    return {from: d.toISOString().slice(0,10), to: t};
+  }
+  return {from: document.getElementById('pv-from')?.value||t, to: document.getElementById('pv-to')?.value||t};
+}
+
+function setPvPreset(p, el) {
+  pvPreset = p;
+  document.querySelectorAll('#hist-product-view .cat-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  const customDiv = document.getElementById('pv-custom-range');
+  if(customDiv) customDiv.style.display = p==='custom' ? 'flex' : 'none';
+  renderHistProductView();
+}
+
+function renderHistProductView() {
+  const pid = document.getElementById('pv-product')?.value;
+  const res = document.getElementById('pv-result');
+  if(!res) return;
+  if(!pid) { res.innerHTML = '<div class="empty">Select a product above to view dispatch history</div>'; return; }
+  const {from, to} = getPvDateRange();
+  const prod = S.products.find(x=>x.id===pid);
+  const entries = S.history.filter(h => h.productId===pid && h.type==='dispatch' && h.date>=from && h.date<=to);
+  const byCustomer = {};
+  entries.forEach(h => { byCustomer[h.customerId] = (byCustomer[h.customerId]||0) + h.qty; });
+  const total = entries.reduce((a,b)=>a+b.qty, 0);
+  const rows = Object.entries(byCustomer).sort((a,b)=>b[1]-a[1]).map(([cid,qty])=>({name:(S.customers.find(x=>x.id===cid)?.name||'Unknown'), qty}));
+  if(!rows.length) {
+    res.innerHTML = `<div class="stat-card" style="margin-bottom:14px"><div class="stat-label">Total Dispatched — ${prod?.name||'?'}</div><div class="stat-val" style="color:var(--accent);font-size:28px;font-family:'DM Mono',monospace">0</div></div><div class="empty">No dispatch records for <strong>${prod?.name||'?'}</strong> in this period</div>`;
+    return;
+  }
+  res.innerHTML = `
+    <div class="stat-card" style="margin-bottom:16px">
+      <div class="stat-label">Total Dispatched — ${prod?.name||'?'}</div>
+      <div class="stat-val" style="color:var(--accent);font-size:28px;font-family:'DM Mono',monospace">${total.toLocaleString()}</div>
+    </div>
+    <div class="card" style="overflow:hidden">
+      <div class="card-header"><div class="card-title">By Customer</div></div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>#</th><th>Customer</th><th>Qty Dispatched</th><th>% of Total</th></tr></thead>
+        <tbody>${rows.map((r,i)=>`<tr>
+          <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:12px">${i+1}</td>
+          <td><strong>${r.name}</strong></td>
+          <td><span class="badge bg-green" style="font-family:'DM Mono',monospace">${r.qty.toLocaleString()}</span></td>
+          <td style="color:var(--muted);font-size:12px">${total?Math.round(r.qty/total*100)+'%':'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+}
+
 // ═══════════════════════════════════════════════
 // CUSTOMER CARD MODAL
 // ═══════════════════════════════════════════════
@@ -4904,144 +4976,6 @@ setInterval(loadFromDB, 15000);
 // ═══════════════════════════════════════
 // BULK EDIT
 // ═══════════════════════════════════════
-let bulkEdits = {}; // custId -> {driverId, routeOrder, deliveryDays, frequency}
-
-function renderBulk() {
-  const q = (document.getElementById('bulk-search')?.value||'').toLowerCase();
-  const df = document.getElementById('bulk-driver-filter')?.value||'';
-  
-  // Populate driver filter
-  const ddf = document.getElementById('bulk-driver-filter');
-  if(ddf && ddf.options.length <= 2) {
-    S.drivers.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.id; opt.textContent = d.name;
-      ddf.appendChild(opt);
-    });
-  }
-  
-  let custs = S.customers.filter(c => c.active);
-  if(q) custs = custs.filter(c => c.name.toLowerCase().includes(q));
-  if(df === '__none__') custs = custs.filter(c => !c.driverId);
-  else if(df) custs = custs.filter(c => c.driverId === df);
-  
-  const DAYS_LABELS = ['','Mon','Tue','Wed','Thu','Fri','Sat'];
-  
-  const tb = document.getElementById('bulk-tbody');
-  if(!tb) return;
-  tb.innerHTML = custs.map(c => {
-    const edit = bulkEdits[c.id] || {};
-    const driverId = edit.driverId !== undefined ? edit.driverId : (c.driverId||'');
-    const routeOrder = edit.routeOrder !== undefined ? edit.routeOrder : (c.routeOrder||'');
-    const days = edit.deliveryDays !== undefined ? edit.deliveryDays : (c.deliveryDays||[c.dueDay||4]);
-    const freq = edit.frequency !== undefined ? edit.frequency : (c.frequency||'Weekly');
-    
-    const dayCbs = [1,2,3,4,5,6].map(d => 
-      `<label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" ${days.includes(d)?'checked':''} onchange="bulkSetDay('${c.id}',${d},this.checked)" style="width:auto;cursor:pointer">
-        ${DAYS_LABELS[d]}
-      </label>`
-    ).join('');
-    
-    const driverOpts = `<option value="">— Unassigned</option>` + S.drivers.map(d => 
-      `<option value="${d.id}" ${driverId===d.id?'selected':''}>${d.name}</option>`
-    ).join('');
-    
-    const freqOpts = ['Weekly','Fortnightly','Monthly','3x Week','2x Week','Daily','On Demand'].map(f =>
-      `<option value="${f}" ${freq===f?'selected':''}>${f}</option>`
-    ).join('');
-    
-    const hasEdit = bulkEdits[c.id];
-    return `<tr style="${hasEdit?'background:#f0fdf4;':''}">
-      <td><strong style="font-size:13px">${c.name}</strong><div style="font-size:11px;color:var(--muted)">${c.address||''}</div></td>
-      <td><select onchange="bulkSetDriver('${c.id}',this.value)" style="width:130px;padding:5px 8px;font-size:12px">${driverOpts}</select></td>
-      <td><input type="number" value="${routeOrder}" min="1" max="999" onchange="bulkSetRoute('${c.id}',this.value,'${did}',${day})" style="width:55px;padding:5px 7px;text-align:center;font-size:12px"></td>
-      <td><div style="display:flex;gap:8px;flex-wrap:wrap">${dayCbs}</div></td>
-      <td><select onchange="bulkSetFreq('${c.id}',this.value)" style="width:120px;padding:5px 8px;font-size:12px">${freqOpts}</select></td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="5" class="empty">No customers found</td></tr>';
-}
-
-function bulkSetDriver(cid, val) {
-  if(!bulkEdits[cid]) bulkEdits[cid]={};
-  bulkEdits[cid].driverId = val;
-  _highlightBulkRow(cid);
-}
-function bulkSetRoute(cid, val, forDriver, forDay) {
-  if(!bulkEdits[cid]) bulkEdits[cid]={};
-  bulkEdits[cid].routeOrder = parseInt(val)||99;
-  // Also store per-day route if we know which driver/day context
-  if(forDriver && forDay) {
-    if(!bulkEdits[cid].dayRoutes) bulkEdits[cid].dayRoutes = {};
-    bulkEdits[cid].dayRoutes[forDriver+'_'+forDay] = parseInt(val)||99;
-  }
-  _highlightBulkRow(cid);
-}
-function bulkSetDay(cid, day, checked) {
-  const c = S.customers.find(x=>x.id===cid); if(!c) return;
-  if(!bulkEdits[cid]) bulkEdits[cid]={};
-  const current = bulkEdits[cid].deliveryDays !== undefined ? bulkEdits[cid].deliveryDays : [...(c.deliveryDays||[c.dueDay||4])];
-  if(checked) { if(!current.includes(day)) current.push(day); }
-  else { const idx=current.indexOf(day); if(idx>-1) current.splice(idx,1); }
-  bulkEdits[cid].deliveryDays = current.sort();
-  _highlightBulkRow(cid);
-}
-function bulkSetFreq(cid, val) {
-  if(!bulkEdits[cid]) bulkEdits[cid]={};
-  bulkEdits[cid].frequency = val;
-  _highlightBulkRow(cid);
-}
-function _highlightBulkRow(cid) {
-  // rows are in order - just re-color via query
-  const rows = document.querySelectorAll('#bulk-tbody tr');
-  rows.forEach(r => {
-    const sel = r.querySelector('select');
-    if(sel && sel.closest('tr')) {
-      const cidInRow = r.querySelector('input[type=number]');
-      // We can't easily match rows without IDs, renderBulk will re-render
-    }
-  });
-}
-
-async function saveBulkAll() {
-  const count = Object.keys(bulkEdits).length;
-  if(!count) return alert('No changes to save.');
-  if(!confirm(`Save ${count} customer changes?`)) return;
-  _toast('Saving ' + count + ' changes...', 5000);
-  let saved = 0, errors = 0;
-  for(const [cid, edit] of Object.entries(bulkEdits)) {
-    const c = S.customers.find(x=>x.id===cid); if(!c) continue;
-    const upd = {};
-    if(edit.driverId !== undefined) upd.driver_id = edit.driverId || null;
-    if(edit.routeOrder !== undefined) upd.route_order = edit.routeOrder;
-    if(edit.deliveryDays !== undefined) {
-      upd.delivery_days = JSON.stringify(edit.deliveryDays);
-      upd.due_day = edit.deliveryDays[0] || 4;
-    }
-    if(edit.frequency !== undefined) upd.frequency = edit.frequency;
-    try {
-      await _patch('customers', upd, '?id=eq.'+cid);
-      // Update local cache
-      if(edit.driverId !== undefined) c.driverId = edit.driverId||null;
-      if(edit.routeOrder !== undefined) c.routeOrder = edit.routeOrder;
-      if(edit.deliveryDays !== undefined) { c.deliveryDays = edit.deliveryDays; c.dueDay = edit.deliveryDays[0]||4; }
-      if(edit.frequency !== undefined) c.frequency = edit.frequency;
-      // Update dayDrivers route orders if changed in route view
-      if(edit.dayRoutes && c.dayDrivers) {
-        Object.entries(edit.dayRoutes).forEach(([key, ro]) => {
-          const [drvId, dy] = key.split('_');
-          const dd = c.dayDrivers.find(x => x.driverId===drvId && x.day===parseInt(dy));
-          if(dd) dd.routeOrder = ro;
-        });
-        await _patch('customers', {day_drivers: JSON.stringify(c.dayDrivers)}, '?id=eq.'+cid).catch(()=>{});
-      }
-      saved++;
-    } catch(e) { console.error('Bulk save error', cid, e); errors++; }
-  }
-  bulkEdits = {};
-  _toast(`✓ Saved ${saved} customers${errors?', '+errors+' errors':''}`, 3000);
-  renderBulk();
-}
 
 
 // ═══════════════════════════════════════
@@ -5084,7 +5018,7 @@ const ACCESS = {
     label:    'Driver'
   },
   admin: {
-    pages:    ['dashboard','receiving','order','dispatch','operation','stock','history','driver','bulk','admin','pricing'],
+    pages:    ['dashboard','receiving','order','dispatch','operation','stock','history','driver','admin','pricing'],
     readOnly: [],
     label:    'Admin'
   }
@@ -5277,109 +5211,6 @@ function lockSystem() {
 // ═══════════════════════════════════════
 // ROUTE VIEW (Driver × Day)
 // ═══════════════════════════════════════
-let bulkView = 'table';
-
-function setBulkView(v) {
-  bulkView = v;
-  document.getElementById('bulk-table-view').style.display = v==='table' ? 'block' : 'none';
-  document.getElementById('bulk-route-view').style.display  = v==='route' ? 'block' : 'none';
-  document.getElementById('bulk-view-table').className = 'btn btn-sm ' + (v==='table' ? 'btn-blue' : 'btn-secondary');
-  document.getElementById('bulk-view-route').className = 'btn btn-sm ' + (v==='route' ? 'btn-blue' : 'btn-secondary');
-  if(v==='route') {
-    // populate driver select
-    const ds = document.getElementById('route-driver-sel');
-    ds.innerHTML = '<option value="">Select Driver...</option>' + S.drivers.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
-    renderRouteView();
-  }
-}
-
-function renderRouteView() {
-  const did = document.getElementById('route-driver-sel')?.value;
-  const day = parseInt(document.getElementById('route-day-sel')?.value||1);
-  const rl = document.getElementById('route-list');
-  if(!rl) return;
-  if(!did) { rl.innerHTML = '<div class="empty">Select a driver above</div>'; return; }
-  
-  const DAYS = ['','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const drv = S.drivers.find(d=>d.id===did);
-  
-  // Get customers for this driver on this day
-  // Check both primary driverId AND dayDrivers array entries
-  let custsWithRoute = [];
-  S.customers.filter(c => c.active !== 0).forEach(c => {
-    // Check dayDrivers first (multi-day assignments)
-    if(c.dayDrivers && c.dayDrivers.length) {
-      const match = c.dayDrivers.find(dd => dd.driverId === did && dd.day === day);
-      if(match) {
-        custsWithRoute.push({cust: c, routeOrder: match.routeOrder || c.routeOrder || 99});
-      }
-    } else {
-      // Fall back to primary driver + deliveryDays
-      if(c.driverId === did) {
-        const days = c.deliveryDays && c.deliveryDays.length ? c.deliveryDays : [c.dueDay||4];
-        if(days.includes(day)) {
-          custsWithRoute.push({cust: c, routeOrder: c.routeOrder || 99});
-        }
-      }
-    }
-  });
-  let custs = custsWithRoute.map(x => x.cust);
-  
-  if(!custs.length) {
-    rl.innerHTML = `<div class="empty">${drv?.name} has no customers on ${DAYS[day]}</div>`;
-    return;
-  }
-  
-  // Sort by per-day route order
-  custs = custs.slice().sort((a,b) => {
-    const getRO = (c) => {
-      if(bulkEdits[c.id]?.routeOrder !== undefined) return bulkEdits[c.id].routeOrder;
-      if(c.dayDrivers && c.dayDrivers.length) {
-        const dd = c.dayDrivers.find(x => x.driverId===did && x.day===day);
-        if(dd) return dd.routeOrder || 99;
-      }
-      return c.routeOrder || 99;
-    };
-    return getRO(a) - getRO(b);
-  });
-  
-  rl.innerHTML = `
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:var(--accent)">
-      🗺️ <strong>${drv?.name} — ${DAYS[day]}</strong> · ${custs.length} stops · Set route numbers below
-    </div>
-    <table style="width:100%">
-      <thead><tr>
-        <th style="width:80px">Route #</th>
-        <th>Customer</th>
-        <th>Address</th>
-        <th>Frequency</th>
-      </tr></thead>
-      <tbody>
-        ${custs.map((c,i) => {
-          // Get per-day route order
-          let ro;
-          if(bulkEdits[c.id]?.routeOrder !== undefined) {
-            ro = bulkEdits[c.id].routeOrder;
-          } else if(c.dayDrivers && c.dayDrivers.length) {
-            const dd = c.dayDrivers.find(x => x.driverId===did && x.day===day);
-            ro = dd ? (dd.routeOrder||'') : (c.routeOrder||'');
-          } else {
-            ro = c.routeOrder||'';
-          }
-          const edited = !!bulkEdits[c.id];
-          return `<tr style="${edited?'background:#f0fdf4;':''}">
-            <td><input type="number" value="${ro}" min="1" max="999"
-              onchange="bulkSetRoute('${c.id}',this.value)"
-              style="width:60px;padding:6px 8px;text-align:center;font-family:monospace,monospace;font-size:15px;font-weight:700;border:2px solid ${edited?'var(--accent)':'var(--border)'};border-radius:6px">
-            </td>
-            <td><strong style="font-size:13px">${c.name}</strong></td>
-            <td style="font-size:12px;color:var(--muted)">${c.address||'—'}</td>
-            <td><span class="badge bg-green" style="font-size:11px">${c.frequency}</span></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-}
 
 // ═══════════════════════════════════════
 // CUSTOM FREQUENCIES
@@ -5443,37 +5274,6 @@ function rebuildFreqSelects() {
   } catch(e) {}
 })();
 
-// ═══════════════════════════════════════
-// PATCH renderBulk — fix init glitch + count
-// ═══════════════════════════════════════
-const _origRenderBulk = renderBulk;
-renderBulk = function() {
-  // Ensure driver filter is populated first
-  const ddf = document.getElementById('bulk-driver-filter');
-  if(ddf) {
-    const prevVal = ddf.value;
-    ddf.innerHTML = '<option value="">All Drivers</option><option value="__none__">Unassigned</option>' +
-      S.drivers.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
-    ddf.value = prevVal;
-  }
-  _origRenderBulk();
-  // Update count
-  const countEl = document.getElementById('bulk-count');
-  if(countEl) {
-    const q = (document.getElementById('bulk-search')?.value||'').toLowerCase();
-    const df = document.getElementById('bulk-driver-filter')?.value||'';
-    let custs = S.customers.filter(c => c.active);
-    if(q) custs = custs.filter(c => c.name.toLowerCase().includes(q));
-    if(df === '__none__') custs = custs.filter(c => !c.driverId);
-    else if(df) custs = custs.filter(c => c.driverId === df);
-    countEl.textContent = custs.length;
-  }
-  // Show unsaved indicator
-  const unsaved = document.getElementById('bulk-unsaved');
-  if(unsaved) unsaved.style.display = Object.keys(bulkEdits).length ? 'inline' : 'none';
-  // Also init route view driver select
-  if(bulkView === 'route') renderRouteView();
-};
 
 // ═══════════════════════════════════════
 // PATCH renderAdmin — add customer search
@@ -5493,30 +5293,8 @@ renderAdmin = function() {
   // Render custom frequencies
   renderFrequencies();
   rebuildFreqSelects();
-  // Populate route driver select if route view active
-  const rds = document.getElementById('route-driver-sel');
-  if(rds) {
-    const prev = rds.value;
-    rds.innerHTML = '<option value="">Select Driver...</option>' + S.drivers.map(d=>`<option value="${d.id}">${d.name}</option>`).join('');
-    rds.value = prev;
-  }
 };
 
-// Patch saveBulkAll to also refresh route view
-const _origSaveBulkAll = saveBulkAll;
-saveBulkAll = async function() {
-  await _origSaveBulkAll();
-  if(bulkView === 'route') renderRouteView();
-};
-
-// Patch bulkSetRoute to refresh route view after setting
-const _origBulkSetRoute = bulkSetRoute;
-bulkSetRoute = function(cid, val) {
-  _origBulkSetRoute(cid, val);
-  const unsaved = document.getElementById('bulk-unsaved');
-  if(unsaved) unsaved.style.display = 'inline';
-  if(bulkView === 'route') setTimeout(renderRouteView, 50);
-};
 
 
 // ═══════════════════════════════════════
