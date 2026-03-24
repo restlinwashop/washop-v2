@@ -2260,6 +2260,7 @@ function printOrderSheet(){
   w.document.write(body);
 }
 let moQtys={};
+let eoId = null;
 function openManualModal(){
   document.getElementById('mo-cust').innerHTML='<option value="">Select...</option>'+S.customers.filter(c=>c.active).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   document.getElementById('mo-date').value=selDay||todayStr();
