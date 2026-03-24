@@ -2004,6 +2004,7 @@ function _renderOrdersInner(){
             </div>
             <div class="order-row-actions">
               ${o.status==='pending'?`<button class="btn btn-primary btn-sm" onclick="markPacked('${o.id}')">✓ Mark Packed</button>`:''}
+              ${o.status==='packed'?`<button class="btn btn-sm btn-warn" onclick="undoPack('${o.id}')">↩ Undo Pack</button>`:''}
               <button class="btn btn-sm btn-blue" onclick="openEO('${o.id}')">✏ Edit / Delete</button>
               <div class="order-bags-row">
                 <label style="margin-bottom:0;font-size:12px">Bags</label>
@@ -2074,6 +2075,11 @@ function renderOrderProdSummary(orders){
 function markPacked(id){
   const o=S.orders.find(x=>x.id===id);if(!o)return;
   o.status='packed';addActivity(`Packed: ${o.customerName} (${o.bagCount} bags)`);
+  renderOrders();updateOrderBadge();updateProdSummary();
+}
+function undoPack(id){
+  const o=S.orders.find(x=>x.id===id);if(!o||o.status!=='packed')return;
+  o.status='pending';addActivity(`Undo pack: ${o.customerName}`);
   renderOrders();updateOrderBadge();updateProdSummary();
 }
 function updateOrderBadge(){const cnt=S.orders.filter(o=>o.status==='pending').length;const el=document.getElementById('order-badge');el.style.display=cnt?'inline':'none';el.textContent=cnt;}
@@ -3977,6 +3983,12 @@ const _origMarkPacked = markPacked;
 markPacked = async function(id) {
   try { await _patch('orders',{status:'packed'},'?id=eq.'+id); } catch(e) { console.warn('markPacked DB:', e); }
   _origMarkPacked(id);
+};
+
+const _origUndoPack = undoPack;
+undoPack = async function(id) {
+  try { await _patch('orders',{status:'pending'},'?id=eq.'+id); } catch(e) { console.warn('undoPack DB:', e); }
+  _origUndoPack(id);
 };
 
 const _origConfirmDelivery = confirmDelivery;
