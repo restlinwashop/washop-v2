@@ -970,6 +970,13 @@ hr{border:none;border-top:1px solid var(--border);margin:18px 0;}
       </div>
     </div>
 
+    <!-- Category filter -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="opf-all"   onclick="setOpFilter('all')"   style="padding:6px 18px;border-radius:20px;border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;background:var(--accent);color:#fff;border-color:var(--accent)">All</button>
+      <button id="opf-linen" onclick="setOpFilter('linen')" style="padding:6px 18px;border-radius:20px;border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s">Linen</button>
+      <button id="opf-towel" onclick="setOpFilter('towel')" style="padding:6px 18px;border-radius:20px;border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s">Towel</button>
+    </div>
+
     <!-- Summary bar: what's needed today -->
     <div class="card" style="margin-bottom:18px">
       <div class="card-header">
@@ -5067,6 +5074,19 @@ bulkSetRoute = function(cid, val) {
 // S.opUsed      = built from orders that are 'delivered' or 'packed'
 
 let opQtys = {}; // productId -> qty to send
+let opFilter = localStorage.getItem('opFilter') || 'all'; // 'all' | 'linen' | 'towel' — local only, never synced
+
+function setOpFilter(f) {
+  opFilter = f;
+  localStorage.setItem('opFilter', f);
+  ['all','linen','towel'].forEach(k => {
+    const btn = document.getElementById('opf-'+k);
+    if(btn) btn.style.background = k===f ? 'var(--accent)' : '';
+    if(btn) btn.style.color = k===f ? '#fff' : '';
+    if(btn) btn.style.borderColor = k===f ? 'var(--accent)' : 'var(--border)';
+  });
+  renderOperation();
+}
 
 function initOperation() {
   // Set default date to today (skip weekends → Monday)
@@ -5083,6 +5103,16 @@ function initOperation() {
 function renderOperation() {
   const date = document.getElementById('op-date')?.value || todayStr();
   opQtys = {};
+
+  // Restore active filter button state
+  ['all','linen','towel'].forEach(k => {
+    const btn = document.getElementById('opf-'+k);
+    if(!btn) return;
+    const active = k === opFilter;
+    btn.style.background = active ? 'var(--accent)' : '';
+    btn.style.color = active ? '#fff' : '';
+    btn.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+  });
 
   // ── Target dates: 1 day ahead normally; Friday → Saturday + Monday ──
   // Operation runs Mon-Fri only. On Friday, prepare for both Sat and Mon deliveries.
@@ -5112,8 +5142,14 @@ function renderOperation() {
   // Render required grid
   const reqGrid = document.getElementById('op-required-grid');
   const reqKeys = Object.keys(required);
-  if(reqKeys.length) {
-    reqGrid.innerHTML = reqKeys.map(pid => {
+  const filteredReqKeys = reqKeys.filter(pid => {
+    if(opFilter === 'all') return true;
+    const cat = S.categories.find(c => c.id === required[pid].catId);
+    const ct = cat?.type || 'linen';
+    return opFilter === 'towel' ? ct === 'towel' : ct !== 'towel';
+  });
+  if(filteredReqKeys.length) {
+    reqGrid.innerHTML = filteredReqKeys.map(pid => {
       const r = required[pid];
       const sent = _opSentTotal(pid, date);
       const used = _opUsedTotal(pid, date);
@@ -5124,7 +5160,7 @@ function renderOperation() {
       const cat = S.categories.find(c => c.id === r.catId);
       const catType = cat?.type || 'linen';
       const statusColor = isDone ? '#15803d' : sent > 0 ? '#92400e' : '#6b7280';
-      return `<div onclick="openKP('${r.name}','How many sending to Factory 2?',(v)=>{opQtys['${pid}']=v;renderOperation();},${opQtys[pid]||0},false,true)"
+      return `<div onclick="openKP('${r.name}','How many sending to Factory 2?',(v)=>{opQtys['${pid}']=v;},${opQtys[pid]||0},false,true)"
         style="background:#fff;border:2px solid ${isDone?'#86efac':sent>0?'#fde68a':'var(--border)'};border-radius:12px;padding:16px;transition:border-color .3s;cursor:pointer;-webkit-tap-highlight-color:transparent">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
           <span style="font-size:14px;font-weight:700;flex:1">${r.name}</span>
@@ -5184,7 +5220,16 @@ function renderOperation() {
   };
 
   const grouped = {}; groupOrder.forEach(g => grouped[g] = []);
-  S.products.forEach(p => { if(!reqKeys.includes(p.id)) grouped[_opGroup(p)].push(p); });
+  S.products.forEach(p => {
+    if(reqKeys.includes(p.id)) return; // already shown in required section
+    if(opFilter !== 'all') {
+      const cat = S.categories.find(c => c.id === p.catId);
+      const ct = cat?.type || 'linen';
+      if(opFilter === 'towel' && ct !== 'towel') return;
+      if(opFilter === 'linen' && ct === 'towel') return;
+    }
+    grouped[_opGroup(p)].push(p);
+  });
 
   let entryHtml = '';
   groupOrder.forEach(groupName => {
