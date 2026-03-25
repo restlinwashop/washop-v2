@@ -5405,8 +5405,8 @@ function renderOperation() {
     prepDates = [addDays(date, 1), addDays(date, 3)]; // Saturday + Monday
     document.getElementById('op-date-label').textContent = fmtD(addDays(date,1)) + ' + ' + fmtD(addDays(date,3));
   } else {
-    prepDates = [addDays(date, 1)];
-    document.getElementById('op-date-label').textContent = fmtD(addDays(date, 1));
+    prepDates = [addDays(date, 1), addDays(date, 2)]; // tomorrow + day after tomorrow
+    document.getElementById('op-date-label').textContent = fmtD(addDays(date, 1)) + ' + ' + fmtD(addDays(date, 2));
   }
 
   // ── Required: pending orders for preparation target dates ──
