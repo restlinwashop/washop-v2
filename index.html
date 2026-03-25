@@ -5404,8 +5404,8 @@ function renderOperation() {
   if (_opDow === 5) { // Friday
     prepDates = [addDays(date, 1), addDays(date, 3)]; // Saturday + Monday
     document.getElementById('op-date-label').textContent = fmtD(addDays(date,1)) + ' + ' + fmtD(addDays(date,3));
-  } else {
-    prepDates = [addDays(date, 1), addDays(date, 2)]; // tomorrow + day after tomorrow
+  } else { // Mon–Thu: prepare for tomorrow + day after tomorrow
+    prepDates = [addDays(date, 1), addDays(date, 2)]; // [D+1, D+2]
     document.getElementById('op-date-label').textContent = fmtD(addDays(date, 1)) + ' + ' + fmtD(addDays(date, 2));
   }
 
