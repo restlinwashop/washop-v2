@@ -25,7 +25,7 @@ function getPrepDates(workDate: string): string[] {
   const dow = new Date(workDate + 'T00:00:00').getDay()
   const next = addDays(workDate, 1)
   if (dow === 5) return [next, addDays(workDate, 3)] // Fri → Sat + Mon
-  return [next]                                       // Mon–Thu → tomorrow only
+  return [next, addDays(workDate, 2)]                // Mon–Thu → tomorrow + day after
 }
 
 function prepDatesLabel(prepDates: string[]): string {
@@ -272,7 +272,7 @@ export function OperationPageClient() {
     return map
   }, [orders, tomorrow])
 
-  // Pending orders for dayAfter — only on Friday (Monday's orders)
+  // Pending orders for dayAfter — both Mon-Thu (day after tomorrow) and Friday (Monday)
   const dayAfterPendingMap = useMemo(() => {
     const map: Record<string, { name: string; qty: number; catId: string }> = {}
     if (!dayAfter) return map
